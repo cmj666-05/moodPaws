@@ -1,31 +1,42 @@
 ﻿import crypto from 'node:crypto'
 import mqtt from 'mqtt'
 
-const mode = process.argv[2] || 'device-tcp'
-
+const mode = process.argv[2] || 'web-wss'
 const host = 'iot-06z00b1eo2alugk.mqtt.iothub.aliyuncs.com'
-const productKey = 'k1wxakcs6OI'
-const propertyPostTopic = `/sys/${productKey}/DHT11/thing/event/property/post`
-const webForwardTopic = `/${productKey}/webapp/user/get`
 const timeoutMs = 60_000
 
+const testWebDevice = {
+  productKey: 'k1wxaEnEO8L',
+  deviceName: 'petInfo',
+  deviceSecret: '53e62471edfbf70c7b225dd260ca7d4e'
+}
+
+const legacyDevice = {
+  productKey: 'k1wxakcs6OI',
+  deviceName: 'DHT11',
+  clientId:
+    'k1wxakcs6OI.DHT11|securemode=2,signmethod=hmacsha256,timestamp=1773712773834|',
+  username: 'DHT11&k1wxakcs6OI',
+  password:
+    'f2c31edbf1045e2cf0f49e67765840a2e90fd6e63ed7608056aba6933178be92'
+}
+
 const presets = {
-  'device-tcp': {
+  'web-wss': createWebPreset(),
+  'legacy-device-tcp': {
     url: `mqtt://${host}:1883`,
-    clientId:
-      'k1wxakcs6OI.DHT11|securemode=2,signmethod=hmacsha256,timestamp=1773712773834|',
-    username: 'DHT11&k1wxakcs6OI',
-    password:
-      'f2c31edbf1045e2cf0f49e67765840a2e90fd6e63ed7608056aba6933178be92',
-    topic: propertyPostTopic,
-    description: 'Use the existing DHT11 device credential over raw MQTT/TCP.'
-  },
-  'web-wss': createWebWssPreset()
+    clientId: legacyDevice.clientId,
+    username: legacyDevice.username,
+    password: legacyDevice.password,
+    topic: `/sys/${legacyDevice.productKey}/${legacyDevice.deviceName}/thing/event/property/post`,
+    description:
+      'Use the legacy DHT11 device credential over raw MQTT/TCP for comparison.'
+  }
 }
 
 if (!presets[mode]) {
   console.error(`Unknown mode: ${mode}`)
-  console.error('Supported modes: device-tcp, web-wss')
+  console.error('Supported modes: web-wss, legacy-device-tcp')
   process.exit(1)
 }
 
@@ -72,9 +83,33 @@ client.on('connect', () => {
 
 client.on('message', (topic, payload) => {
   clearTimeout(timeout)
+  const text = payload.toString()
+
   console.log(`Received at: ${new Date().toISOString()}`)
   console.log(`Message received on ${topic}:`)
-  console.log(payload.toString())
+  console.log(text)
+
+  try {
+    const parsed = JSON.parse(text)
+    const items = parsed.items ?? {}
+    const summary = {
+      sourceDeviceName: parsed.deviceName ?? null,
+      requestId: parsed.requestId ?? null,
+      temp: items['PetHouse:Temp']?.value ?? null,
+      humi: items['PetHouse:Humi']?.value ?? null,
+      co2: items['PetHouse:CO2']?.value ?? null,
+      ch2o: items['PetHouse:CH2O']?.value ?? null,
+      voc: items['PetHouse:VOC']?.value ?? null,
+      mq135: items['PetHouse:MQ135']?.value ?? null,
+      weight: items['PetHouse:Weight']?.value ?? null
+    }
+
+    console.log('Parsed summary:')
+    console.log(JSON.stringify(summary, null, 2))
+  } catch (error) {
+    console.error(`Payload parse failed: ${error.message}`)
+  }
+
   shutdown(0)
 })
 
@@ -84,26 +119,24 @@ client.on('error', (error) => {
   shutdown(1)
 })
 
-function createWebWssPreset() {
-  const deviceName = 'webapp'
-  const deviceSecret = '03a0edc6d46dd71a4eecd81ec95f5bd0'
-  const rawClientId = `${productKey}.${deviceName}`
-  const signContent = `clientId${rawClientId}deviceName${deviceName}productKey${productKey}`
+function createWebPreset() {
+  const rawClientId = `${testWebDevice.productKey}.${testWebDevice.deviceName}`
+  const signContent =
+    `clientId${rawClientId}` +
+    `deviceName${testWebDevice.deviceName}` +
+    `productKey${testWebDevice.productKey}`
   const password = crypto
-    .createHmac('sha256', deviceSecret)
+    .createHmac('sha256', testWebDevice.deviceSecret)
     .update(signContent)
     .digest('hex')
 
   return {
     url: `wss://${host}:443/mqtt`,
     clientId: `${rawClientId}|securemode=2,signmethod=hmacsha256|`,
-    username: `${deviceName}&${productKey}`,
+    username: `${testWebDevice.deviceName}&${testWebDevice.productKey}`,
     password,
-    topic: webForwardTopic,
+    topic: `/${testWebDevice.productKey}/${testWebDevice.deviceName}/user/get`,
     description:
-      'Use the documented webapp credential over MQTT/WebSocket Secure and subscribe to the forwarded custom topic.'
+      'Use the petInfo test web device over MQTT/WebSocket Secure and subscribe to the forwarded custom topic.'
   }
 }
-
-
-
