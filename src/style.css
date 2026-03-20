@@ -177,12 +177,38 @@ pre {
   margin-top: 16px;
 }
 
+.section-stack {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.section-panel {
+  padding: 18px;
+  border-radius: 24px;
+  border: 1px solid rgba(16, 32, 51, 0.08);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 18px 42px rgba(21, 58, 89, 0.08);
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.section-heading h2 {
+  font-size: 1.05rem;
+  letter-spacing: -0.03em;
+}
+
 .meta-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .sensor-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 14px;
 }
 
 .meta-card,

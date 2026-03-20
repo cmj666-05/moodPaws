@@ -101,7 +101,14 @@ client.on('message', (topic, payload) => {
       ch2o: items['PetHouse:CH2O']?.value ?? null,
       voc: items['PetHouse:VOC']?.value ?? null,
       mq135: items['PetHouse:MQ135']?.value ?? null,
-      weight: items['PetHouse:Weight']?.value ?? null
+      weight: items['PetHouse:Weight']?.value ?? null,
+      x: items['Collar:XYZ']?.value?.X ?? null,
+      y: items['Collar:XYZ']?.value?.Y ?? null,
+      z: items['Collar:XYZ']?.value?.Z ?? null,
+      heartRate: items['Collar:XKXY']?.value?.HeartRate ?? null,
+      spo2: items['Collar:XKXY']?.value?.SPO2 ?? null,
+      longitude: items['Collar:GPS']?.value?.Longitude ?? null,
+      latitude: items['Collar:GPS']?.value?.Latitude ?? null
     }
 
     console.log('Parsed summary:')
