@@ -3,6 +3,16 @@ apply plugin: 'com.android.application'
 android {
     namespace = "com.pet.iot"
     compileSdk = rootProject.ext.compileSdkVersion
+
+    signingConfigs {
+        release {
+            storeFile file('moodpaws-release.jks')
+            storePassword 'Qazwer123.'
+            keyAlias 'moodPaws'
+            keyPassword 'Qazwer123.'
+        }
+    }
+
     defaultConfig {
         applicationId "com.pet.iot"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -16,8 +26,14 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+
     buildTypes {
+        debug {
+            signingConfig signingConfigs.release
+        }
+
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

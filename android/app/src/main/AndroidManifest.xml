@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
@@ -33,9 +33,11 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
-    </application>
 
-    <!-- Permissions -->
+        <meta-data
+            android:name="com.amap.api.v2.apikey"
+            android:value="38df705c5863e34c8345b45520092c5b" />
+    </application>
 
     <uses-permission android:name="android.permission.INTERNET" />
 </manifest>
