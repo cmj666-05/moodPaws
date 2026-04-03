@@ -2,9 +2,9 @@
 
 ## 1. 当前定位
 
-本项目当前以 `Android App` 为唯一交付目标。
+本项目主要运行环境为 **Android App**。
 
-虽然技术栈仍然是 `Vite + Vue 3 + Capacitor`，但页面只围绕 Android WebView 运行场景开发，不再把独立 Web 端作为产品目标。
+技术栈为 `Vite + Vue 3 + Capacitor`，由于考虑到跨端 MQTT `clientId` 互踢问题及阿里云 CORS 限制，本项目不再兼容 Web 端，仅支持通过 Capacitor 构建后的安卓原生环境。
 
 ## 2. 当前高德配置
 
@@ -24,10 +24,19 @@
 ### 2.3 当前地图行为
 
 - 地图区域位于首页项圈页的 GPS 卡片
-- 当前仅在 `Android` 运行时尝试加载高德地图
+- **仅支持 Android 端**，不再兼容 Web 环境
 - 未收到 GPS 经纬度时显示等待状态
 - 高德脚本加载失败时显示错误提示
 - 收到 `Longitude` 和 `Latitude` 后，地图会自动落点并居中
+
+### 2.4 地图加载方式
+
+高德地图加载器 (`src/services/amap/loader.js`) 使用标准浏览器 `<script>` 标签注入方式加载高德 JS API。该方式在以下环境均可正常工作：
+
+| 运行环境 | 地图加载 | 说明 |
+|:---|:---|:---|
+| Android WebView | ✅ 正常 | WebView 中同样使用 JS API，不依赖原生 SDK |
+| Web 浏览器 | ❌ 废弃 | 已放弃 Web 平台兼容 |
 
 ## 3. 当前签名配置
 
@@ -67,13 +76,13 @@
 ### 6.1 前端构建
 
 ```bash
-npm run build
+pnpm run build
 ```
 
 ### 6.2 同步到 Android 工程
 
 ```bash
-npx cap sync android
+pnpm exec cap sync android
 ```
 
 ### 6.3 生成正式 APK
@@ -83,9 +92,24 @@ cd android
 ./gradlew assembleRelease
 ```
 
-## 7. 后续维护要求
+## 7. Web 端开发与预览
+
+### 7.1 开发服务器
+
+```bash
+pnpm run dev
+```
+
+说明：
+
+- 启动后自动在 `http://localhost:5173` 提供 UI 静态预览
+- 受限于阿里云跨域与设备互踢限制，Web 端不再支持 MQTT 数据连接，仅用于 UI 调试。
+- 完整功能请打包至 Android 真机测试。
+
+## 8. 后续维护要求
 
 1. 不要随意替换 [android/app/moodpaws-release.jks](/D:/desktop/moodPaws/android/app/moodpaws-release.jks)。
 2. 若修改包名，必须同时检查高德 Android Key 是否仍然匹配。
 3. 若更换 keystore，必须重新确认新的 SHA1，并同步到高德平台。
 4. 后续若改为接入高德 Android 原生 SDK，需要单独补充原生依赖、权限与桥接设计，不能直接沿用当前 JS 地图方案的文档描述。
+5. Web 端地图使用的是 Web JS API Key，Android 端在 AndroidManifest.xml 中配置了独立的 Android Key，二者互不干扰。

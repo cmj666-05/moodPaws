@@ -1,54 +1,88 @@
-# 🔧 Steps 2 & 3 完成总结
+# 🔧 MoodPaws 开发进度总结
 
-## 改动概览
+## 最新改动（跨平台适配 + 首页优化）
+
+### CollarView.vue 首页优化
+
+| 改动 | 说明 |
+|------|------|
+| 移除 X/Y/Z 原始显示 | 不再直接展示三轴加速度计的 X、Y、Z 原始值 |
+| 新增步数估算 | 基于加速度计向量幅度变化（`√(x²+y²+z²)`）检测步数 |
+| 缩小顶部摘要卡 | 头像 64px→48px，移除 Android 提示文字，缩减 padding 和间距 |
+| 移除 Android 平台限制 | `isAndroidRuntime` 替换为 `isNative/isWeb`，地图和 MQTT 不再检测平台 |
+
+### 跨平台兼容
+
+| 运行环境 | 高德地图 | MQTT 连接 | 说明 |
+|:---|:---|:---|:---|
+| Web 浏览器 | ✅ 正常加载 | ⚠️ 受阿里云 CORS 限制 | 地图可用，MQTT 可能连不上 |
+| Android WebView | ✅ 正常加载 | ✅ 正常连接 | 两者均可用 |
+
+### 文件改动清单
+
+| 文件 | 类型 | 说明 |
+|------|------|------|
+| [CollarView.vue](file:///d:/desktop/moodPaws/src/views/collar/CollarView.vue) | MODIFY | 移除 X/Y/Z、新增步数、缩小摘要卡、移除 Android 限制 |
+| [开发步骤文档.md](file:///d:/desktop/moodPaws/md/开发步骤文档.md) | MODIFY | 更新为双平台支持，新增 MQTT Web 兼容说明章节 |
+| [Android打包与高德配置说明.md](file:///d:/desktop/moodPaws/md/Android打包与高德配置说明.md) | MODIFY | 更新地图兼容说明，新增 Web 开发章节 |
+| [task.md](file:///d:/desktop/moodPaws/md/task.md) | MODIFY | 更新文件路径和任务状态 |
+
+---
+
+## 历史改动
 
 ### Step 2: 基础设施建设
 
 | 文件 | 类型 | 说明 |
 |------|------|------|
-| [utils/mqtt-config.js](file:///d:/desktop/pet/utils/mqtt-config.js) | NEW | MQTT 连接配置（接入点、三元组、Topic 模板） |
-| [utils/mqtt-service.js](file:///d:/desktop/pet/utils/mqtt-service.js) | NEW | MQTT 服务类（WSS连接、HMAC-SHA256鉴权、订阅/发布、自动重连） |
-| [main.js](file:///d:/desktop/pet/main.js) | MODIFY | 挂载 `$mqtt` 全局属性 |
-| [App.vue](file:///d:/desktop/pet/App.vue) | MODIFY | [onLaunch](file:///d:/desktop/pet/App.vue#5-10) 自动连接 MQTT |
+| [src/services/mqtt/config.js](file:///d:/desktop/moodPaws/src/services/mqtt/config.js) | NEW | MQTT 连接配置（Broker URL、petInfo 三元组、Topic） |
+| [src/services/mqtt/client.js](file:///d:/desktop/moodPaws/src/services/mqtt/client.js) | NEW | MQTT 客户端工厂（WSS 连接、事件代理） |
+| [src/composables/useMqtt.js](file:///d:/desktop/moodPaws/src/composables/useMqtt.js) | NEW | Vue Composable（连接状态、订阅、消息解析） |
+| [src/utils/pet-house-parser.js](file:///d:/desktop/moodPaws/src/utils/pet-house-parser.js) | NEW | 消息解析层（PetHouse 平铺 + Collar 嵌套字段兼容） |
 
-### Step 3: 清理与重排
+### Step 3: 页面结构
 
-| 操作 | 文件 |
+| 文件 | 说明 |
 |------|------|
-| ❌ 删除 | `pages/sub/mood-record/` (2文件) |
-| ❌ 删除 | `pages/sub/health/` (2文件) |
-| ❌ 删除 | `pages/sub/diet/` (2文件) |
-| ❌ 删除 | `pages/sub/walk/` (2文件) |
-| ✅ 新建 | [pages/sub/collar/collar.vue](file:///d:/desktop/pet/pages/sub/collar/collar.vue) — 宠物项圈 |
-| ✅ 新建 | [pages/sub/foster/foster.vue](file:///d:/desktop/pet/pages/sub/foster/foster.vue) — 寄养屋 |
-| ✅ 新建 | [pages/sub/emotion/emotion.vue](file:///d:/desktop/pet/pages/sub/emotion/emotion.vue) — 情感分析 |
-| ✅ 新建 | [pages/sub/social/social.vue](file:///d:/desktop/pet/pages/sub/social/social.vue) — NFC 社交 |
-| ✅ 更新 | [pages.json](file:///d:/desktop/pet/pages.json) — 新路由 + TabBar "数据" |
+| [src/App.vue](file:///d:/desktop/moodPaws/src/App.vue) | 主壳页面，底部 Tab 导航（项圈/寄养屋/情感/社交） |
+| [src/views/collar/CollarView.vue](file:///d:/desktop/moodPaws/src/views/collar/CollarView.vue) | 项圈首页（心率、血氧、步数、GPS 地图、实时轨迹） |
 
-### 额外完成: Tab 页更新
-| 文件 | 改动 |
+### Step 4: 高德地图集成
+
+| 文件 | 说明 |
 |------|------|
-| [index.vue](file:///d:/desktop/pet/pages/index/index.vue) | 4 个 IoT 功能入口 + MQTT 状态面板 |
-| [mood.vue](file:///d:/desktop/pet/pages/mood/mood.vue) | 改为数据总览页（实时概览 + 数据流） |
+| [src/config/amap.js](file:///d:/desktop/moodPaws/src/config/amap.js) | Web JS Key + 安全密钥 + Android Key |
+| [src/services/amap/loader.js](file:///d:/desktop/moodPaws/src/services/amap/loader.js) | 标准 `<script>` 注入加载，Web/Android 通用 |
 
 ## 最终项目结构
+
 ```
-pet/
-├── common/styles/         # 全局样式（蓝色主题）
-├── pages/
-│   ├── index/             # Tab: 首页
-│   ├── mood/              # Tab: 数据总览
-│   ├── mine/              # Tab: 我的
-│   └── sub/
-│       ├── collar/        # 宠物项圈（MQTT Sub）
-│       ├── foster/        # 寄养屋（MQTT Sub + Pub）
-│       ├── emotion/       # 情感分析（MQTT Sub）
-│       └── social/        # NFC 社交（MQTT Sub）
-├── utils/
-│   ├── mqtt-config.js     # 连接配置
-│   └── mqtt-service.js    # MQTT 服务单例
-├── App.vue, main.js, pages.json ...
+moodPaws/
+├── src/
+│   ├── App.vue               # 主壳 + Tab 导航
+│   ├── main.js               # 入口
+│   ├── style.css              # 全局样式
+│   ├── composables/
+│   │   └── useMqtt.js         # MQTT Vue Composable
+│   ├── config/
+│   │   └── amap.js            # 高德地图配置
+│   ├── services/
+│   │   ├── mqtt/
+│   │   │   ├── client.js      # MQTT 客户端
+│   │   │   └── config.js      # MQTT 连接参数
+│   │   └── amap/
+│   │       └── loader.js      # 高德地图加载器
+│   ├── utils/
+│   │   └── pet-house-parser.js # 双设备消息解析
+│   └── views/
+│       └── collar/
+│           └── CollarView.vue  # 项圈首页
+├── android/                    # Capacitor Android 工程
+├── md/                         # 项目文档
+├── scripts/                    # 测试脚本
+├── vite.config.js
+└── package.json
 ```
 
 > [!IMPORTANT]
-> 使用前请在 [utils/mqtt-config.js](file:///d:/desktop/pet/utils/mqtt-config.js) 中替换 `ProductKey`, `DeviceName`, `DeviceSecret` 为真实设备三元组。
+> MQTT 连接方式为 WSS，Web 端和 Android 端使用完全相同的代码。Web 端可能因阿里云 CORS 限制无法直连 Broker。

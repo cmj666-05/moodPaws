@@ -1,24 +1,25 @@
 :root {
-  --color-bg: #f8f6f3;
-  --color-card: #ffffff;
-  --color-primary: #ff8a4c;
-  --color-primary-dark: #e67332;
-  --color-heart: #ff6b6b;
-  --color-heart-bg: #fff0ef;
-  --color-spo2: #5b9cf7;
-  --color-spo2-bg: #eef4ff;
-  --color-motion: #7c5cf7;
-  --color-motion-bg: #f0ecff;
-  --color-gps: #36c49f;
-  --color-gps-bg: #eaf8f3;
-  --color-text: #1e293b;
-  --color-text-secondary: #64748b;
-  --color-text-muted: #94a3b8;
-  --color-border: rgba(0, 0, 0, 0.06);
-  --tab-height: 56px;
-  --radius: 16px;
-  --radius-lg: 20px;
+  --color-bg: #f4f2ee;
+  --color-surface: rgba(255, 255, 255, 0.88);
+  --color-surface-strong: #ffffff;
+  --color-surface-muted: #f8f7f4;
+  --color-border: rgba(28, 32, 38, 0.08);
+  --color-divider: rgba(28, 32, 38, 0.06);
+  --color-text: #1f2933;
+  --color-text-secondary: #667085;
+  --color-text-muted: #8b95a7;
+  --color-primary: #3d7a5e;
+  --color-primary-soft: rgba(61, 122, 94, 0.1);
+  --color-success: #56b67f;
+  --color-warning: #e3a546;
+  --color-danger: #db6a62;
+  --color-shadow: 0 10px 28px rgba(27, 32, 38, 0.08);
+  --radius-sm: 14px;
+  --radius: 20px;
+  --radius-lg: 28px;
+  --tab-height: 62px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --page-max-width: 560px;
 }
 
 *,
@@ -35,22 +36,25 @@ html {
 }
 
 body {
-  font-family: -apple-system, 'PingFang SC', 'Helvetica Neue', 'Microsoft YaHei', sans-serif;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--color-text);
-  background: var(--color-bg);
   min-width: 320px;
   min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'SF Pro Text',
+    'Helvetica Neue', 'Microsoft YaHei', sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--color-text);
+  background:
+    radial-gradient(circle at top left, rgba(245, 242, 236, 0.96), transparent 28%),
+    linear-gradient(180deg, #f7f5f1 0%, #f2f0eb 100%);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 button {
   font: inherit;
-  cursor: pointer;
   border: none;
   background: none;
+  cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 

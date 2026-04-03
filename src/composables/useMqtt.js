@@ -47,6 +47,7 @@ export function useMqtt() {
     const nextClient = createMqttClient({
       onConnect(activeClient) {
         status.value = 'connected'
+        client.value = activeClient
         activeClient.subscribe(mqttConfig.topic, { qos: 0 }, (error) => {
           if (error) {
             status.value = 'error'

@@ -1,5 +1,7 @@
+const DIRECT_BROKER_URL = 'wss://iot-06z00b1eo2alugk.mqtt.iothub.aliyuncs.com:443/mqtt'
+
 export const mqttConfig = {
-  brokerUrl: 'wss://iot-06z00b1eo2alugk.mqtt.iothub.aliyuncs.com:443/mqtt',
+  brokerUrl: DIRECT_BROKER_URL,
   topic: '/k1wxaEnEO8L/petInfo/user/get',
   productKey: 'k1wxaEnEO8L',
   deviceName: 'petInfo',
