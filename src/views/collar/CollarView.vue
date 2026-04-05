@@ -6,12 +6,36 @@ import { GridComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { amapConfig } from '../../config/amap'
-import { useMqtt } from '../../composables/useMqtt'
+import { usePetApi } from '../../composables/usePetApi'
 import { loadAmap } from '../../services/amap/loader'
+
+const formatMetricTime = (value) => {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed <= 0) return new Date().toLocaleTimeString()
+  return new Date(parsed).toLocaleTimeString()
+}
+
+const formatHistoryPoints = (points) =>
+  points.map((item) => ({
+    v: Number(item.value),
+    t: formatMetricTime(item.time)
+  }))
+
+const getLastHeartRate = (points) => points.at(-1)?.v ?? '--'
 
 echarts.use([LineChart, GridComponent, CanvasRenderer])
 
-const { status, errorMessage, metricSections, connect } = useMqtt()
+const {
+  loading,
+  errorMessage,
+  metricSections,
+  heartRateHistory,
+  locationTrack,
+  emotion,
+  refreshAll,
+  startPolling,
+  stopPolling
+} = usePetApi()
 
 const mapContainer = ref(null)
 const mapError = ref('')
@@ -19,7 +43,6 @@ const mapError = ref('')
 let map = null
 let marker = null
 let polyline = null
-const trackPoints = []
 
 function getMetric(sectionKey, metricKey) {
   const section = metricSections.value?.find((item) => item.key === sectionKey)
@@ -35,24 +58,18 @@ const motionZ = computed(() => getMetric('collar-motion', 'Z'))
 const longitude = computed(() => getMetric('collar-location', 'Longitude'))
 const latitude = computed(() => getMetric('collar-location', 'Latitude'))
 
-const petMood = ref('开心')
+const petMood = computed(() => emotion.value.currentMood || '开心')
 const stepCount = ref(0)
 const lastMagnitude = ref(0)
 const hrChartEl = ref(null)
 const HR_MAX_POINTS = 30
 const STEP_THRESHOLD = 1.2
-const hrHistory = ref(
-  Array.from({ length: 20 }, (_, index) => ({
-    v: Math.floor(80 + Math.random() * 25),
-    t: new Date(Date.now() - (20 - index) * 2000).toLocaleTimeString()
-  }))
-)
+const hrHistory = ref([])
 
 let hrChart = null
-let mockHrInterval = null
 
-const isOnline = computed(() => status.value === 'subscribed')
-const isConnecting = computed(() => status.value === 'connecting' || status.value === 'connected')
+const isOnline = computed(() => !loading.value && metricSections.value?.length > 0)
+const isConnecting = computed(() => loading.value)
 const isWeb = !Capacitor.isNativePlatform()
 
 const hasCoordinates = computed(() => {
@@ -105,7 +122,7 @@ function initHrChart() {
 }
 
 function handleStatusTap() {
-  if (status.value === 'idle' || status.value === 'error') connect()
+  refreshAll()
 }
 
 function getCurrentPosition() {
@@ -113,26 +130,31 @@ function getCurrentPosition() {
   return [Number(longitude.value.value), Number(latitude.value.value)]
 }
 
-function appendTrackPoint(position) {
-  const previousPoint = trackPoints.at(-1)
-  if (previousPoint && previousPoint[0] === position[0] && previousPoint[1] === position[1]) return
-  trackPoints.push(position)
+function getTrackPath() {
+  if (locationTrack.value.length) {
+    return locationTrack.value
+      .map((point) => [Number(point.longitude), Number(point.latitude)])
+      .filter((point) => Number.isFinite(point[0]) && Number.isFinite(point[1]))
+  }
+
+  const current = getCurrentPosition()
+  return current ? [current] : []
 }
 
 function updateTrack() {
-  const position = getCurrentPosition()
-  if (!map || !marker || !polyline || !position) return
+  const path = getTrackPath()
+  if (!map || !marker || !polyline || !path.length) return
 
-  appendTrackPoint(position)
-  marker.setPosition(position)
-  polyline.setPath(trackPoints)
+  const current = path.at(-1)
+  marker.setPosition(current)
+  polyline.setPath(path)
 
-  if (trackPoints.length > 1) {
+  if (path.length > 1) {
     map.setFitView([marker, polyline], false, [24, 24, 24, 24], 15)
     return
   }
 
-  map.setZoomAndCenter(15, position)
+  map.setZoomAndCenter(15, current)
 }
 
 async function setupMap() {
@@ -171,14 +193,16 @@ async function setupMap() {
   }
 }
 
-watch(heartRate, (metric) => {
-  const value = Number(metric?.value)
-  if (!Number.isFinite(value) || value <= 0) return
-  hrHistory.value.push({ v: value, t: new Date().toLocaleTimeString() })
-  if (hrHistory.value.length > HR_MAX_POINTS) hrHistory.value.shift()
-  if (hrChart) hrChart.setOption(buildHrOption(hrHistory.value))
-  else nextTick(initHrChart)
-})
+watch(
+  heartRateHistory,
+  (points) => {
+    const normalized = formatHistoryPoints(points).filter((item) => Number.isFinite(item.v)).slice(-HR_MAX_POINTS)
+    hrHistory.value = normalized
+    if (hrChart) hrChart.setOption(buildHrOption(hrHistory.value))
+    else nextTick(initHrChart)
+  },
+  { immediate: true, deep: true }
+)
 
 watch([motionX, motionY, motionZ], () => {
   const x = Number(motionX.value?.value) || 0
@@ -191,31 +215,20 @@ watch([motionX, motionY, motionZ], () => {
   lastMagnitude.value = magnitude
 })
 
-watch([longitude, latitude], () => {
+watch([longitude, latitude, locationTrack], () => {
   updateTrack()
-})
+}, { deep: true })
 
 onMounted(async () => {
-  connect()
+  await refreshAll()
+  startPolling()
   await nextTick()
   initHrChart()
-
-  mockHrInterval = setInterval(() => {
-    if (heartRate.value?.value) {
-      clearInterval(mockHrInterval)
-      return
-    }
-    const value = Math.floor(80 + Math.random() * 25)
-    hrHistory.value.push({ v: value, t: new Date().toLocaleTimeString() })
-    if (hrHistory.value.length > HR_MAX_POINTS) hrHistory.value.shift()
-    if (hrChart) hrChart.setOption(buildHrOption(hrHistory.value))
-  }, 2000)
-
   await setupMap()
 })
 
 onBeforeUnmount(() => {
-  if (mockHrInterval) clearInterval(mockHrInterval)
+  stopPolling()
   hrChart?.dispose()
   hrChart = null
   if (map) {

@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import CollarView from './views/collar/CollarView.vue'
+import DashboardView from './views/dashboard/DashboardView.vue'
 import EmotionView from './views/emotion/EmotionView.vue'
 
 const activeTab = ref('collar')
@@ -17,13 +18,14 @@ const tabs = [
   <div class="app-shell">
     <main class="app-content">
       <CollarView v-if="activeTab === 'collar'" />
+      <DashboardView v-else-if="activeTab === 'house'" />
       <EmotionView v-else-if="activeTab === 'emotion'" />
 
       <section v-else class="placeholder-page">
         <div class="placeholder-card">
           <span class="placeholder-kicker">{{ tabs.find((tab) => tab.key === activeTab)?.label }}</span>
           <h2>{{ tabs.find((tab) => tab.key === activeTab)?.label }}功能即将开放</h2>
-          <p>当前版本先聚焦项圈与情绪模块，后续会补充更多宠物陪伴能力。</p>
+          <p>当前版本先聚焦项圈、宠舍与情绪模块，后续会补充更多宠物陪伴能力。</p>
         </div>
       </section>
     </main>

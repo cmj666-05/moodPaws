@@ -1,45 +1,49 @@
 <script setup>
-import { useMqtt } from '../../composables/useMqtt'
+import { onMounted } from 'vue'
+import { usePetApi } from '../../composables/usePetApi'
 
 const {
-  brokerUrl,
-  topic,
-  status,
-  statusText,
+  loading,
   errorMessage,
-  latestPayloadText,
   sourceSummary,
   metricSections,
-  connect,
-  disconnect,
-  clearPayload
-} = useMqtt()
+  rawPayloadText,
+  latestTelemetry,
+  statusText,
+  refreshAll,
+  clearTelemetry,
+  startPolling
+} = usePetApi()
+
+onMounted(async () => {
+  await refreshAll()
+  startPolling()
+})
 </script>
 
 <template>
   <main class="dashboard-shell">
     <section class="hero-panel">
-      <p class="eyebrow">MoodPaws Android</p>
+      <p class="eyebrow">MoodPaws Server API</p>
       <h1>PetHouse + Collar</h1>
       <p class="lead">
-        Android app overview for the two source devices forwarded to
-        <code>petInfo</code>. Current topic:
-        <code>{{ topic }}</code>
+        Dashboard data is now served by
+        <code>moodpaws-server</code>. Current topic:
+        <code>{{ latestTelemetry.topic || '--' }}</code>
       </p>
 
       <div class="status-row">
-        <span class="status-pill" :data-state="status">{{ statusText }}</span>
-        <span class="status-hint">Broker: {{ brokerUrl }}</span>
+        <span class="status-pill" :data-state="loading ? 'loading' : errorMessage ? 'error' : 'ready'">
+          {{ statusText }}
+        </span>
+        <span class="status-hint">Received At: {{ latestTelemetry.receivedAt || '--' }}</span>
       </div>
 
       <div class="action-row">
-        <button class="primary-button" type="button" @click="connect">
-          Start Sync
+        <button class="primary-button" type="button" @click="refreshAll">
+          Refresh
         </button>
-        <button class="ghost-button" type="button" @click="disconnect">
-          Disconnect
-        </button>
-        <button class="ghost-button" type="button" @click="clearPayload">
+        <button class="ghost-button" type="button" @click="clearTelemetry">
           Clear
         </button>
       </div>
@@ -67,7 +71,7 @@ const {
               <strong>{{ card.value }}</strong>
               <span>{{ card.unit }}</span>
             </div>
-            <p class="card-time">Data time: {{ card.time }}</p>
+            <p class="card-time">Data time: {{ card.time || '--' }}</p>
           </article>
         </div>
       </article>
@@ -76,9 +80,9 @@ const {
     <section class="payload-panel">
       <div class="payload-header">
         <h2>Raw Payload</h2>
-        <p>petInfo receives forwarded messages from multiple devices</p>
+        <p>Data returned from the backend telemetry service</p>
       </div>
-      <pre>{{ latestPayloadText || 'No payload received yet.' }}</pre>
+      <pre>{{ rawPayloadText || 'No payload received yet.' }}</pre>
     </section>
   </main>
 </template>

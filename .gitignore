@@ -12,8 +12,15 @@ dist
 dist-ssr
 *.local
 
+# Environment / local data
+moodpaws-server/.env
+moodpaws-server/data/*.db
+moodpaws-server/data/*.db-shm
+moodpaws-server/data/*.db-wal
+
 # Editor directories and files
 .vscode/*
+.claude/*
 !.vscode/extensions.json
 .idea
 .DS_Store

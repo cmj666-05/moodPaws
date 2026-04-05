@@ -3,7 +3,8 @@ import * as echarts from 'echarts/core'
 import { BarChart, GaugeChart, LineChart } from 'echarts/charts'
 import { GraphicComponent, GridComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { usePetApi } from '../../composables/usePetApi'
 
 echarts.use([GaugeChart, BarChart, LineChart, GridComponent, GraphicComponent, CanvasRenderer])
 
@@ -13,26 +14,28 @@ const gaugeChartEl = ref(null)
 const voiceChartEl = ref(null)
 const fluctuationChartEl = ref(null)
 
+const {
+  loading,
+  errorMessage,
+  emotion,
+  refreshEmotion,
+  startPolling,
+  stopPolling
+} = usePetApi()
+
 const petProfile = {
   name: 'Lucky',
   breed: '金毛寻回犬',
-  age: '3 岁',
-  mood: '开心'
+  age: '3 岁'
 }
 
-const vocalMetrics = {
-  frequency: [9, 16, 24, 13, 5, 8, 13, 18, 11, 3],
-  tone: [16, 13, 11, 7, 5, 7, 9, 13, 18, 20]
-}
-
-const fluctuationMetrics = [46, 40, 32, 36, 52, 66, 74]
-const fluctuationTimeline = ['清晨', '上午', '中午', '午后', '傍晚', '晚上', '深夜']
-
-const moodHistory = [
-  { label: '晨间情绪', value: '平静' },
-  { label: '午后活力', value: '偏高' },
-  { label: '夜间状态', value: '放松' }
-]
+const currentMood = computed(() => emotion.value.currentMood || '开心')
+const emotionScore = computed(() => Number(emotion.value.score) || 0)
+const voiceFrequency = computed(() => emotion.value.voice?.frequency || [])
+const voiceTone = computed(() => emotion.value.voice?.tone || [])
+const fluctuationTimeline = computed(() => emotion.value.fluctuation?.timeline || [])
+const fluctuationMetrics = computed(() => emotion.value.fluctuation?.values || [])
+const moodHistory = computed(() => emotion.value.history || [])
 
 const analysisSlides = [
   { key: 'voice', title: '声线分析', subtitle: '频率与音调趋势' },
@@ -42,6 +45,11 @@ const analysisSlides = [
 let gaugeChart = null
 let voiceChart = null
 let fluctuationChart = null
+
+function getVoiceCategories() {
+  const size = Math.max(voiceFrequency.value.length, voiceTone.value.length, 1)
+  return Array.from({ length: size }, (_, index) => `${index + 1}`)
+}
 
 function buildGaugeOption() {
   return {
@@ -89,14 +97,14 @@ function buildGaugeOption() {
         axisLabel: { show: false },
         detail: { show: false },
         title: { show: false },
-        data: [{ value: 68 }]
+        data: [{ value: emotionScore.value }]
       }
     ]
   }
 }
 
 function buildVoiceOption() {
-  const categories = Array.from({ length: 10 }, (_, index) => `${index + 1}`)
+  const categories = getVoiceCategories()
   return {
     animation: false,
     grid: [
@@ -165,7 +173,7 @@ function buildVoiceOption() {
         type: 'bar',
         xAxisIndex: 0,
         yAxisIndex: 0,
-        data: vocalMetrics.frequency,
+        data: voiceFrequency.value,
         barWidth: '68%',
         itemStyle: {
           borderRadius: [999, 999, 999, 999],
@@ -179,7 +187,7 @@ function buildVoiceOption() {
         type: 'bar',
         xAxisIndex: 1,
         yAxisIndex: 1,
-        data: vocalMetrics.tone,
+        data: voiceTone.value,
         barWidth: '68%',
         itemStyle: {
           borderRadius: [999, 999, 999, 999],
@@ -200,7 +208,7 @@ function buildFluctuationOption() {
     xAxis: {
       type: 'category',
       boundaryGap: false,
-      data: fluctuationTimeline,
+      data: fluctuationTimeline.value,
       axisLine: { show: false },
       axisTick: { show: false },
       axisLabel: {
@@ -229,7 +237,7 @@ function buildFluctuationOption() {
         smooth: true,
         symbol: 'circle',
         symbolSize: 8,
-        data: fluctuationMetrics,
+        data: fluctuationMetrics.value,
         lineStyle: {
           width: 2.5,
           color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
@@ -255,19 +263,23 @@ function buildFluctuationOption() {
   }
 }
 
+function updateCharts() {
+  if (gaugeChart) gaugeChart.setOption(buildGaugeOption())
+  if (voiceChart) voiceChart.setOption(buildVoiceOption())
+  if (fluctuationChart) fluctuationChart.setOption(buildFluctuationOption())
+}
+
 function initCharts() {
   if (gaugeChartEl.value && !gaugeChart) {
     gaugeChart = echarts.init(gaugeChartEl.value)
-    gaugeChart.setOption(buildGaugeOption())
   }
   if (voiceChartEl.value && !voiceChart) {
     voiceChart = echarts.init(voiceChartEl.value)
-    voiceChart.setOption(buildVoiceOption())
   }
   if (fluctuationChartEl.value && !fluctuationChart) {
     fluctuationChart = echarts.init(fluctuationChartEl.value)
-    fluctuationChart.setOption(buildFluctuationOption())
   }
+  updateCharts()
 }
 
 function handleResize() {
@@ -300,13 +312,26 @@ function setActiveSlide(index) {
   })
 }
 
+watch(
+  emotion,
+  () => {
+    if (gaugeChart || voiceChart || fluctuationChart) {
+      updateCharts()
+    }
+  },
+  { deep: true }
+)
+
 onMounted(async () => {
+  await refreshEmotion()
+  startPolling()
   await nextTick()
   initCharts()
   window.addEventListener('resize', handleResize)
 })
 
 onBeforeUnmount(() => {
+  stopPolling()
   window.removeEventListener('resize', handleResize)
   destroyCharts()
 })
@@ -323,7 +348,7 @@ onBeforeUnmount(() => {
             <h1>{{ petProfile.name }}</h1>
             <p>{{ petProfile.breed }} · {{ petProfile.age }}</p>
           </div>
-          <span class="mood-pill">{{ petProfile.mood }}</span>
+          <span class="mood-pill">{{ currentMood }}</span>
         </div>
 
         <div class="gauge-wrap">
@@ -344,7 +369,9 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <p class="emotion-current">当前情绪</p>
+        <p class="emotion-current">{{ currentMood }}</p>
+        <p v-if="loading" class="emotion-status">情绪数据刷新中</p>
+        <p v-else-if="errorMessage" class="emotion-status error">{{ errorMessage }}</p>
       </article>
     </section>
 
@@ -407,6 +434,7 @@ onBeforeUnmount(() => {
           <span>{{ item.label }}</span>
           <strong>{{ item.value }}</strong>
         </div>
+        <div v-if="!moodHistory.length" class="history-empty">暂无情绪摘要</div>
       </div>
     </section>
   </main>
@@ -624,9 +652,15 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
-.analysis-section {
-  margin-top: 14px;
-  margin-bottom: 14px;
+.emotion-status {
+  margin-top: 8px;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.emotion-status.error {
+  color: #b8534d;
 }
 
 .analysis-carousel {
@@ -761,9 +795,10 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--color-divider);
 }
 
-.history-item:last-child {
-  padding-bottom: 0;
-  border-bottom: none;
+.history-empty {
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 13px;
 }
 
 .history-item span {
