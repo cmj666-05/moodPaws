@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import CollarView from './views/collar/CollarView.vue'
 import DashboardView from './views/dashboard/DashboardView.vue'
 import EmotionView from './views/emotion/EmotionView.vue'
+import SocialView from './views/social/SocialView.vue'
 
 const activeTab = ref('collar')
 
@@ -20,6 +21,7 @@ const tabs = [
       <CollarView v-if="activeTab === 'collar'" />
       <DashboardView v-else-if="activeTab === 'house'" />
       <EmotionView v-else-if="activeTab === 'emotion'" />
+      <SocialView v-else-if="activeTab === 'social'" />
 
       <section v-else class="placeholder-page">
         <div class="placeholder-card">
