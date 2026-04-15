@@ -16,7 +16,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 这是一个基于 Vue 3 + Vite 的前端项目，同时通过 Capacitor 输出到 Android 容器。`capacitor.config.json` 指向 `dist` 作为 `webDir`，说明 Web 构建产物会被原生壳复用。
 
-应用入口很轻：`src/main.js` 只负责挂载 `App.vue`。当前没有使用 Vue Router，`src/App.vue` 直接维护底部 tab，并在项圈 / 情绪 / 占位页面之间切换。
+应用入口很轻：`src/main.js` 只负责挂载 `App.vue`。当前没有使用 Vue Router，`src/App.vue` 直接维护底部 4 个 tab，并进行视图切换。
+
+当前 tab 映射关系：
+
+- `项圈` -> `src/views/collar/CollarView.vue`
+- `宠舍` -> `src/views/social/SocialView.vue`
+- `情绪` -> `src/views/emotion/EmotionView.vue`
+- `社交` -> `src/views/dashboard/DashboardView.vue`
 
 ## 核心架构
 
@@ -25,21 +32,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 主要页面都在 `src/views/`：
 
 - `collar/CollarView.vue`：项圈主界面，聚合健康数据、GPS 轨迹、步数估算、在线状态
-- `emotion/EmotionView.vue`：情绪分析展示，主要是静态/假数据驱动的 ECharts 可视化
-- `dashboard/DashboardView.vue`：更偏调试/总览的 MQTT 数据面板，用于查看原始消息和分段指标
+- `social/SocialView.vue`：当前宠舍照护总览页首版，包含环境、看护、体征、饮食、情绪等模块
+- `emotion/EmotionView.vue`：情绪分析展示，主要是 ECharts 可视化
+- `dashboard/DashboardView.vue`：当前社交过渡页 / 建设中页，同时保留后端 telemetry 调试信息
 
-当前产品入口实际挂载的是 `CollarView` 和 `EmotionView`；`DashboardView` 更像调试页面，不在默认 tab 流程里。
+### 2. API 是当前页面主链路
 
-### 2. MQTT 是实时数据主链路
+当前主页面的数据链路是：
 
-MQTT 相关逻辑按“配置 → 客户端封装 → 组合式状态 → 页面消费”分层：
+`moodpaws-server API -> src/composables/usePetApi.js -> 页面响应式状态 -> 页面渲染`
 
-- `src/services/mqtt/config.js`：MQTT broker、topic、认证参数，以及 `getMqttConnectionOptions()`
-- `src/services/mqtt/client.js`：对 `mqtt.connect()` 的轻量封装，只负责把底层事件转成 handlers
-- `src/composables/useMqtt.js`：核心状态管理层，负责连接、订阅、断开、错误状态、最新 payload、解析后的指标数据
-- 页面组件直接调用 `useMqtt()` 获取响应式状态
+`usePetApi()` 当前负责拉取：
 
-如果要改实时链路，优先从 `useMqtt.js` 看整体生命周期，再看 `client.js` 和 `config.js`。
+- `/telemetry/latest`
+- `/telemetry/metrics/HeartRate/history?limit=30`
+- `/telemetry/location/track?limit=200`
+- `/emotion/latest`
+
+注意：
+
+- MQTT 相关代码仍保留在仓库中，但**不再是当前页面主流程**。
+- 当前社交过渡页会复用 `usePetApi()` 的状态、指标分组与原始 payload 调试信息。
+- 当前宠舍页仍以本地假数据首版为主，尚未全面接入真实 API。
 
 ### 3. 设备 payload 会先被归一化再渲染
 
@@ -62,6 +76,8 @@ MQTT 相关逻辑按“配置 → 客户端封装 → 组合式状态 → 页面
 
 ## 开发时需要注意的事实
 
-- 当前没有配置单元测试框架、lint 或格式化脚本；仓库里唯一现成的“测试”入口是 MQTT 连通性脚本 `scripts/test-aliyun-mqtt.mjs`。
-- README 仍是 Vite 模板默认内容，项目真实行为应以 `src/`、`scripts/` 和 Capacitor/MQTT 配置为准。
-- 一些页面使用假数据和模拟状态（尤其情绪页，以及项圈页的部分心率回退逻辑）；不要默认所有展示都来自真实设备。
+- 当前没有配置单元测试框架、lint 或格式化脚本；主要验证方式是运行页面和执行 `pnpm build`。
+- README 仍是 Vite 模板默认内容，项目真实行为应以 `src/`、`md/`、`moodpaws-server/` 和 Capacitor 配置为准。
+- 一些页面使用假数据和模拟状态，尤其宠舍页与情绪页；不要默认所有展示都来自真实设备。
+- 如果继续推进社交能力，应在 `DashboardView.vue` 基础上演进，而不是再把宠舍内容写回社交入口。
+- 如果继续推进宠舍能力，应在 `SocialView.vue` 基础上演进，并逐步把本地假数据替换成 API 数据。

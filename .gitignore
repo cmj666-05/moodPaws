@@ -13,6 +13,7 @@ dist-ssr
 *.local
 
 # Environment / local data
+.env
 moodpaws-server/.env
 moodpaws-server/data/*.db
 moodpaws-server/data/*.db-shm

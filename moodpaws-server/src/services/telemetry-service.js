@@ -1,28 +1,76 @@
 import { getLatestEmotionSnapshot } from '../db/repositories/emotion-repo.js'
-import { getLatestMessage, listMetricHistory, listRecentMessages, listTrackPoints } from '../db/repositories/telemetry-repo.js'
+import {
+  getLatestMessage,
+  getLatestMessageByDeviceName,
+  listMetricHistory,
+  listRecentMessages,
+  listRecentMotionSamples,
+  listTrackPoints
+} from '../db/repositories/telemetry-repo.js'
 import { parsePayloadObject } from '../mqtt/parser.js'
 
-export async function getLatestTelemetry() {
-  const latestMessage = await getLatestMessage()
+const STEP_THRESHOLD = 1.2
+const STEP_SAMPLE_LIMIT = 240
+const DEFAULT_TELEMETRY_DEVICE = 'Collar'
+const HOUSE_DEVICE = 'DogHouse'
+const TRACK_WINDOW_MS = 24 * 60 * 60 * 1000
+const ONLINE_WINDOW_MS = 60 * 1000
 
-  if (!latestMessage) {
+const isValidTrackPoint = (longitude, latitude) =>
+  Number.isFinite(longitude) &&
+  Number.isFinite(latitude) &&
+  longitude >= -180 &&
+  longitude <= 180 &&
+  latitude >= -90 &&
+  latitude <= 90
+
+export async function getLatestTelemetry() {
+  const [latestMessage, latestCollarMessage, latestHouseMessage, motionSamples] = await Promise.all([
+    getLatestMessage(),
+    getLatestMessageByDeviceName(DEFAULT_TELEMETRY_DEVICE),
+    getLatestMessageByDeviceName(HOUSE_DEVICE),
+    listRecentMotionSamples(STEP_SAMPLE_LIMIT)
+  ])
+
+  const baseMessage = latestCollarMessage || latestHouseMessage || latestMessage
+
+  if (!baseMessage) {
     return {
       source: {
         deviceName: '--',
         requestId: '--',
         createdAt: null
       },
-      sections: []
+      sections: [],
+      stepCount: 0,
+      isOnline: false,
+      lastActiveAt: null
     }
   }
 
-  const parsed = parsePayloadObject(JSON.parse(latestMessage.payload_json), latestMessage.topic)
+  const collarParsed = latestCollarMessage
+    ? parsePayloadObject(JSON.parse(latestCollarMessage.payload_json), latestCollarMessage.topic)
+    : null
+  const houseParsed = latestHouseMessage
+    ? parsePayloadObject(JSON.parse(latestHouseMessage.payload_json), latestHouseMessage.topic)
+    : null
+  const baseParsed = parsePayloadObject(JSON.parse(baseMessage.payload_json), baseMessage.topic)
+  const sections = mergeSections(baseParsed.sections, collarParsed?.sections, houseParsed?.sections)
+  const lastActiveAt = Math.max(
+    Number(latestCollarMessage?.received_at) || 0,
+    Number(latestHouseMessage?.received_at) || 0,
+    Number(latestMessage?.received_at) || 0
+  ) || null
+
   return {
-    source: parsed.source,
-    sections: parsed.sections,
-    raw: parsed.raw,
-    receivedAt: latestMessage.received_at,
-    topic: latestMessage.topic
+    source: baseParsed.source,
+    sections,
+    raw: baseParsed.raw,
+    receivedAt: latestMessage?.received_at ?? baseMessage.received_at,
+    topic: latestMessage?.topic ?? baseMessage.topic,
+    stepCount: calculateStepCount(motionSamples),
+    isOnline: Boolean(lastActiveAt && Date.now() - lastActiveAt <= ONLINE_WINDOW_MS),
+    lastActiveAt
   }
 }
 
@@ -43,8 +91,9 @@ export async function getMetricHistory(metricKey, limit = 100) {
   }
 }
 
-export async function getLocationTrack(limit = 200) {
-  const rows = await listTrackPoints(limit)
+export async function getLocationTrack(limit = 1440) {
+  const sinceTs = Date.now() - TRACK_WINDOW_MS
+  const rows = await listTrackPoints(limit, sinceTs)
   return {
     points: rows
       .map((row) => ({
@@ -52,6 +101,7 @@ export async function getLocationTrack(limit = 200) {
         latitude: row.latitude,
         time: row.ts
       }))
+      .filter((point) => isValidTrackPoint(Number(point.longitude), Number(point.latitude)))
       .reverse()
   }
 }
@@ -88,4 +138,74 @@ export async function getLatestEmotion() {
     history: summary.history || [],
     createdAt: snapshot.created_at
   }
+}
+
+function mergeSections(baseSections = [], ...sectionGroups) {
+  const merged = new Map(
+    baseSections.map((section) => [
+      section.key,
+      {
+        ...section,
+        metrics: section.metrics.map((metric) => ({ ...metric }))
+      }
+    ])
+  )
+
+  for (const sections of sectionGroups) {
+    if (!Array.isArray(sections)) continue
+
+    for (const section of sections) {
+      if (!merged.has(section.key)) {
+        merged.set(section.key, {
+          ...section,
+          metrics: section.metrics.map((metric) => ({ ...metric }))
+        })
+        continue
+      }
+
+      const target = merged.get(section.key)
+      const metricsByKey = new Map(target.metrics.map((metric) => [metric.key, metric]))
+
+      for (const metric of section.metrics) {
+        if (!metricsByKey.has(metric.key)) {
+          target.metrics.push({ ...metric })
+          metricsByKey.set(metric.key, target.metrics.at(-1))
+          continue
+        }
+
+        if (metric.value !== '--' && metric.value !== null && metric.value !== undefined) {
+          const current = metricsByKey.get(metric.key)
+          current.value = metric.value
+          current.time = metric.time
+        }
+      }
+    }
+  }
+
+  return Array.from(merged.values())
+}
+
+function calculateStepCount(samples) {
+  if (!Array.isArray(samples) || samples.length < 2) {
+    return 0
+  }
+
+  const orderedSamples = [...samples].reverse()
+  let lastMagnitude = 0
+  let stepCount = 0
+
+  for (const sample of orderedSamples) {
+    const x = Number(sample.x) || 0
+    const y = Number(sample.y) || 0
+    const z = Number(sample.z) || 0
+    const magnitude = Math.sqrt(x * x + y * y + z * z)
+
+    if (lastMagnitude > 0 && Math.abs(magnitude - lastMagnitude) > STEP_THRESHOLD) {
+      stepCount += 1
+    }
+
+    lastMagnitude = magnitude
+  }
+
+  return stepCount
 }

@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import CollarView from './views/collar/CollarView.vue'
 import DashboardView from './views/dashboard/DashboardView.vue'
 import EmotionView from './views/emotion/EmotionView.vue'
@@ -13,17 +13,23 @@ const tabs = [
   { key: 'emotion', label: '情绪' },
   { key: 'social', label: '社交' }
 ]
+
+const tabViews = {
+  collar: CollarView,
+  house: SocialView,
+  emotion: EmotionView,
+  social: DashboardView
+}
+
+const activeComponent = computed(() => tabViews[activeTab.value] ?? null)
 </script>
 
 <template>
   <div class="app-shell">
     <main class="app-content">
-      <CollarView v-if="activeTab === 'collar'" />
-      <DashboardView v-else-if="activeTab === 'house'" />
-      <EmotionView v-else-if="activeTab === 'emotion'" />
-      <SocialView v-else-if="activeTab === 'social'" />
+      <component :is="activeComponent" v-if="activeComponent" />
 
-      <section v-else class="placeholder-page">
+      <section v-if="!activeComponent" class="placeholder-page">
         <div class="placeholder-card">
           <span class="placeholder-kicker">{{ tabs.find((tab) => tab.key === activeTab)?.label }}</span>
           <h2>{{ tabs.find((tab) => tab.key === activeTab)?.label }}功能即将开放</h2>
@@ -75,104 +81,4 @@ const tabs = [
   </div>
 </template>
 
-<style scoped>
-.app-shell {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  min-height: 100dvh;
-}
-
-.app-content {
-  flex: 1;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-.placeholder-page {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: calc(100vh - var(--tab-height));
-  padding: 24px 20px calc(var(--tab-height) + var(--safe-bottom) + 24px);
-}
-
-.placeholder-card {
-  width: min(100%, 420px);
-  padding: 28px 24px;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  box-shadow: var(--color-shadow);
-}
-
-.placeholder-kicker {
-  display: inline-block;
-  margin-bottom: 10px;
-  color: var(--color-text-secondary);
-  font-size: 13px;
-}
-
-.placeholder-card h2 {
-  font-size: 24px;
-  line-height: 1.2;
-  margin-bottom: 10px;
-}
-
-.placeholder-card p {
-  color: var(--color-text-secondary);
-}
-
-.tab-bar {
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: 10px;
-  height: calc(var(--tab-height) + var(--safe-bottom));
-  padding: 8px 8px calc(8px + var(--safe-bottom));
-  border: 1px solid rgba(31, 41, 51, 0.07);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(18px);
-  box-shadow: 0 12px 34px rgba(31, 41, 51, 0.08);
-  display: flex;
-  align-items: stretch;
-  z-index: 100;
-}
-
-.tab-btn {
-  flex: 1;
-  border-radius: 18px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  color: var(--color-text-muted);
-  transition: color 0.2s ease, background-color 0.2s ease;
-}
-
-.tab-btn.active {
-  color: var(--color-text);
-  background: rgba(31, 41, 51, 0.045);
-}
-
-.tab-icon-wrap {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.tab-svg {
-  width: 22px;
-  height: 22px;
-}
-
-.tab-text {
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.2;
-}
-</style>
+<style scoped src="./App.css"></style>

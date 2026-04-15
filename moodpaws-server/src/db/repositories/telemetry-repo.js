@@ -29,6 +29,17 @@ export function getLatestMessage() {
   )
 }
 
+export function getLatestMessageByDeviceName(deviceName) {
+  return get(
+    `SELECT id, topic, device_name, request_id, gmt_create, payload_json, received_at
+     FROM mqtt_messages
+     WHERE device_name = ?
+     ORDER BY received_at DESC
+     LIMIT 1`,
+    [deviceName]
+  )
+}
+
 export function listRecentMessages(limit) {
   return all(
     `SELECT id, topic, device_name, request_id, gmt_create, received_at
@@ -50,7 +61,7 @@ export function listMetricHistory(metricKey, limit) {
   )
 }
 
-export function listTrackPoints(limit) {
+export function listTrackPoints(limit, sinceTs) {
   return all(
     `SELECT longitude.value_num AS longitude, latitude.value_num AS latitude, longitude.ts AS ts
      FROM metric_points AS longitude
@@ -60,7 +71,30 @@ export function listTrackPoints(limit) {
      WHERE longitude.metric_key = 'Longitude'
        AND longitude.value_num IS NOT NULL
        AND latitude.value_num IS NOT NULL
+       AND longitude.value_num BETWEEN -180 AND 180
+       AND latitude.value_num BETWEEN -90 AND 90
+       AND longitude.ts >= ?
      ORDER BY longitude.ts DESC
+     LIMIT ?`,
+    [sinceTs, limit]
+  )
+}
+
+export function listRecentMotionSamples(limit) {
+  return all(
+    `SELECT x.value_num AS x, y.value_num AS y, z.value_num AS z, x.ts AS ts
+     FROM metric_points AS x
+     JOIN metric_points AS y
+       ON y.message_id = x.message_id
+      AND y.metric_key = 'Y'
+     JOIN metric_points AS z
+       ON z.message_id = x.message_id
+      AND z.metric_key = 'Z'
+     WHERE x.metric_key = 'X'
+       AND x.value_num IS NOT NULL
+       AND y.value_num IS NOT NULL
+       AND z.value_num IS NOT NULL
+     ORDER BY x.ts DESC
      LIMIT ?`,
     [limit]
   )

@@ -35,7 +35,7 @@ export function registerTelemetryRoutes(router) {
 
   router.get('/telemetry/location/track', async (request, response, next) => {
     try {
-      const limit = parseLimit(request.query.limit, 200)
+      const limit = parseLimit(request.query.limit, 1440)
       response.json(await getLocationTrack(limit))
     } catch (error) {
       next(error)

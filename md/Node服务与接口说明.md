@@ -83,9 +83,10 @@ pnpm start
 
 - `3001`
 
-服务启动后访问：
+服务启动后可访问：
 
-- `http://localhost:3001/api/health`
+- 本机调试：`http://localhost:3001/api/health`
+- 已部署服务器：`http://47.109.193.139:3001/api/health`
 
 ---
 
@@ -246,41 +247,6 @@ CORS_ORIGIN=*
 - 查看数据库路径
 - `/api/health` 可同时查看更细的 MQTT 状态字段，包括 `lastEvent`、`lastConnackCode`、`lastDisconnectPacket`、`lastSubscribeGranted`，用于区分“握手失败 / 订阅失败 / 已连接未上报”等场景
 
-返回示例：
-
-```json
-{
-  "ok": true,
-  "service": "moodpaws-server",
-  "mqtt": {
-    "enabled": true,
-    "connected": true,
-    "subscribed": true,
-    "topics": [
-      "/k1wxaEnEO8L/petInfo/user/get"
-    ],
-    "lastMessageAt": 1775308157140,
-    "lastError": "",
-    "lastEvent": "subscribed",
-    "lastConnackCode": 0,
-    "lastDisconnectPacket": null,
-    "lastSubscribeGranted": [
-      {
-        "topic": "/k1wxaEnEO8L/petInfo/user/get",
-        "qos": 0
-      }
-    ]
-  },
-  "db": {
-    "ok": true,
-    "path": "D:\\desktop\\moodPaws\\moodpaws-server\\data\\moodpaws.db"
-  },
-  "now": 1775308157140
-}
-```
-
----
-
 ### 7.2 获取最新总览数据
 
 #### `GET /api/telemetry/latest`
@@ -288,51 +254,13 @@ CORS_ORIGIN=*
 用途：
 
 - 给 Dashboard / Collar 提供当前最新状态
+- 当前返回中已补充 `stepCount`，用于首页“今日步数”展示
 
-返回结构：
+补充说明：
 
-```json
-{
-  "source": {
-    "deviceName": "DogHouse",
-    "requestId": "1775312787332",
-    "createdAt": 1775312787332
-  },
-  "sections": [
-    {
-      "key": "pet-house",
-      "title": "PetHouse",
-      "metrics": [
-        {
-          "key": "PetHouse:Temp",
-          "label": "Temperature",
-          "unit": "C",
-          "value": 43,
-          "time": 1775312787332
-        }
-      ]
-    }
-  ],
-  "raw": {},
-  "receivedAt": 1775308001234,
-  "topic": "/sys/k1wxaEnEO8L/DogHouse/thing/event/property/post"
-}
-```
-
-如果数据库中还没有消息，当前返回：
-
-```json
-{
-  "source": {
-    "deviceName": "--",
-    "requestId": "--",
-    "createdAt": null
-  },
-  "sections": []
-}
-```
-
----
+- 页面展示用的 `sections` 当前优先取最近一条 `device_name = Collar` 的消息，以保证首页心率、定位、运动指标稳定显示。
+- `receivedAt` 与 `topic` 仍反映最近一条总体 telemetry 消息时间，可用于判断链路是否持续有新消息。
+- `stepCount` 由服务端根据最近一段 `X/Y/Z` 历史样本按首页原有口径计算：先计算三轴模长，再在相邻样本模长差值大于阈值 `1.2` 时计一步。
 
 ### 7.3 获取最近原始消息
 
@@ -343,29 +271,6 @@ CORS_ORIGIN=*
 - 调试 MQTT 入库情况
 - 查看最近消息摘要
 
-参数：
-
-- `limit`：可选，默认 `50`，最大 `500`
-
-返回示例：
-
-```json
-{
-  "messages": [
-    {
-      "id": 1,
-      "topic": "/sys/k1wxaEnEO8L/DogHouse/thing/event/property/post",
-      "device_name": "DogHouse",
-      "request_id": "1775312787332",
-      "gmt_create": 1775312787332,
-      "received_at": 1775308001234
-    }
-  ]
-}
-```
-
----
-
 ### 7.4 获取单个指标历史
 
 #### `GET /api/telemetry/metrics/:metricKey/history?limit=100`
@@ -374,28 +279,6 @@ CORS_ORIGIN=*
 
 - 查询心率、血氧、温度、体重等历史数据
 
-示例：
-
-```http
-GET /api/telemetry/metrics/HeartRate/history?limit=30
-GET /api/telemetry/metrics/SPO2/history?limit=30
-GET /api/telemetry/metrics/PetHouse:Temp/history?limit=30
-```
-
-返回示例：
-
-```json
-{
-  "metricKey": "HeartRate",
-  "points": [
-    { "value": 88, "time": 1775308000000 },
-    { "value": 92, "time": 1775308060000 }
-  ]
-}
-```
-
----
-
 ### 7.5 获取定位轨迹
 
 #### `GET /api/telemetry/location/track?limit=200`
@@ -403,26 +286,6 @@ GET /api/telemetry/metrics/PetHouse:Temp/history?limit=30
 用途：
 
 - 给项圈页面地图轨迹使用
-
-参数：
-
-- `limit`：可选，默认 `200`，最大 `500`
-
-返回示例：
-
-```json
-{
-  "points": [
-    {
-      "longitude": 121.4737,
-      "latitude": 31.2304,
-      "time": 1775308000000
-    }
-  ]
-}
-```
-
----
 
 ### 7.6 获取最新情绪结果
 
@@ -433,30 +296,6 @@ GET /api/telemetry/metrics/PetHouse:Temp/history?limit=30
 - 给情绪页提供统一接口
 
 当前返回 mock 情绪数据。
-
-返回示例：
-
-```json
-{
-  "source": "mock",
-  "currentMood": "开心",
-  "score": 68,
-  "voice": {
-    "frequency": [9, 16, 24, 13, 5, 8, 13, 18, 11, 3],
-    "tone": [16, 13, 11, 7, 5, 7, 9, 13, 18, 20]
-  },
-  "fluctuation": {
-    "timeline": ["清晨", "上午", "中午", "午后", "傍晚", "晚上", "深夜"],
-    "values": [46, 40, 32, 36, 52, 66, 74]
-  },
-  "history": [
-    { "label": "晨间情绪", "value": "平静" },
-    { "label": "午后活力", "value": "偏高" },
-    { "label": "夜间状态", "value": "放松" }
-  ],
-  "createdAt": 1775308139210
-}
-```
 
 ---
 
@@ -469,7 +308,7 @@ GET /api/telemetry/metrics/PetHouse:Temp/history?limit=30
 3. `/api/health` 可正常返回
 4. `/api/emotion/latest` 可正常返回 mock 数据
 5. `/api/telemetry/latest`、`/api/telemetry/messages` 在无真实 MQTT 消息时可正常返回空结果
-6. 前端 `src/App.vue` 已将 `house` tab 挂接到 `DashboardView`
+6. 前端 `src/App.vue` 已将 `house` tab 挂接到 `SocialView`，`social` tab 挂接到 `DashboardView`
 7. 前端 `src/views/dashboard/DashboardView.vue`、`src/views/collar/CollarView.vue`、`src/views/emotion/EmotionView.vue` 已改为通过 `src/composables/usePetApi.js` 请求后端 API
 8. 前端已执行 `pnpm build` 并构建成功
 9. 使用当前 `.env` 启动后，`/api/health` 已稳定返回 `mqtt.enabled = true`、`mqtt.connected = true`、`mqtt.subscribed = true`
@@ -490,15 +329,36 @@ GET /api/telemetry/metrics/PetHouse:Temp/history?limit=30
 
 `MQTT -> moodpaws-server -> SQLite -> REST API -> 前端页面`
 
-前端默认通过 `src/config/api.js` 请求：
+前端通过 `src/config/api.js` 读取 API 地址，默认值为：
 
-- `http://localhost:3001/api`
+- `http://47.109.193.139:3001/api`
+
+推荐在项目根目录创建 `.env.local`（或 `.env`）覆盖：
+
+```env
+VITE_API_BASE_URL=http://47.109.193.139:3001/api
+VITE_API_POLL_INTERVAL=5000
+```
+
+已提交模板文件：
+
+- `.env.example`
+
+本机联调时可改为：
+
+- `VITE_API_BASE_URL=http://localhost:3001/api`
+
+Android 安装包如果直接访问当前服务器 HTTP 接口，已在原生层放行：
+
+- 当前采用 Android 全局明文 HTTP 放行配置（`usesCleartextTraffic=true` + `network_security_config`）
+- 当前服务器地址：`http://47.109.193.139:3001/api`
 
 页面接入情况：
 
-- `DashboardView`：读取 `/api/telemetry/latest`
+- `DashboardView`：当前作为社交过渡页，复用 `/api/telemetry/latest` 的调试信息与状态展示
 - `CollarView`：读取 `/api/telemetry/latest`、`/api/telemetry/metrics/HeartRate/history`、`/api/telemetry/location/track`、`/api/emotion/latest`
 - `EmotionView`：读取 `/api/emotion/latest`
+- `SocialView`：当前为宠舍照护页首版，仍以本地假数据为主，尚未全面接入 API
 
 旧前端 MQTT 代码（如 `src/composables/useMqtt.js`、`src/services/mqtt/*`）当前按“保留一版、先不启用”的策略处理，页面主流程已不再直接依赖它们。
 
@@ -507,7 +367,8 @@ GET /api/telemetry/metrics/PetHouse:Temp/history?limit=30
 1. 启动 `moodpaws-server`
 2. 访问 `/api/health` 确认 MQTT 已连接并已订阅
 3. 访问 telemetry 相关接口确认真实消息已入库
-4. 启动前端，联调 Dashboard / Collar / Emotion 三个页面
+4. 启动前端，联调 Collar / Emotion / 社交过渡页
+5. 逐步把宠舍页从本地假数据替换为真实 API 数据
 
 ### 9.3 前端可优先对接的接口
 
@@ -537,5 +398,7 @@ GET /api/telemetry/metrics/PetHouse:Temp/history?limit=30
 - 删除/清理历史数据
 - WebSocket / SSE 实时推送
 - 旧前端 MQTT 文件与 `mqtt` 依赖的物理删除（当前仍保留一版）
+- 真实 NFC 社交流程
+- 宠舍页真实 API 全量接入
 
 当前版本定位就是后端 MVP + 前端 API 化首版。

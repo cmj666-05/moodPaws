@@ -9,6 +9,14 @@ import { amapConfig } from '../../config/amap'
 import { usePetApi } from '../../composables/usePetApi'
 import { loadAmap } from '../../services/amap/loader'
 
+const isValidCoordinatePair = (lng, lat) =>
+  Number.isFinite(lng) &&
+  Number.isFinite(lat) &&
+  lng >= -180 &&
+  lng <= 180 &&
+  lat >= -90 &&
+  lat <= 90
+
 const formatMetricTime = (value) => {
   const parsed = Number(value)
   if (!Number.isFinite(parsed) || parsed <= 0) return new Date().toLocaleTimeString()
@@ -28,13 +36,18 @@ echarts.use([LineChart, GridComponent, CanvasRenderer])
 const {
   loading,
   errorMessage,
+  latestTelemetry,
   metricSections,
   heartRateHistory,
   locationTrack,
   emotion,
   refreshAll,
-  startPolling,
-  stopPolling
+  refreshTelemetryBundle,
+  refreshEmotionBundle,
+  startTelemetryPolling,
+  startEmotionPolling,
+  stopTelemetryPolling,
+  stopEmotionPolling
 } = usePetApi()
 
 const mapContainer = ref(null)
@@ -59,23 +72,22 @@ const longitude = computed(() => getMetric('collar-location', 'Longitude'))
 const latitude = computed(() => getMetric('collar-location', 'Latitude'))
 
 const petMood = computed(() => emotion.value.currentMood || '开心')
-const stepCount = ref(0)
-const lastMagnitude = ref(0)
+const stepCount = computed(() => Number(latestTelemetry.value?.stepCount) || 0)
+const latestTelemetryAt = computed(() => Number(latestTelemetry.value?.lastActiveAt || latestTelemetry.value?.receivedAt) || 0)
 const hrChartEl = ref(null)
 const HR_MAX_POINTS = 30
-const STEP_THRESHOLD = 1.2
 const hrHistory = ref([])
 
 let hrChart = null
 
-const isOnline = computed(() => !loading.value && metricSections.value?.length > 0)
-const isConnecting = computed(() => loading.value)
+const isOnline = computed(() => Boolean(latestTelemetry.value?.isOnline && metricSections.value?.length > 0))
+const isConnecting = computed(() => loading.value && !latestTelemetryAt.value)
 const isWeb = !Capacitor.isNativePlatform()
 
 const hasCoordinates = computed(() => {
   const lng = Number(longitude.value?.value)
   const lat = Number(latitude.value?.value)
-  return Number.isFinite(lng) && Number.isFinite(lat)
+  return isValidCoordinatePair(lng, lat)
 })
 
 const locationStatusText = computed(() => (hasCoordinates.value ? '定位正常' : '等待定位'))
@@ -134,7 +146,7 @@ function getTrackPath() {
   if (locationTrack.value.length) {
     return locationTrack.value
       .map((point) => [Number(point.longitude), Number(point.latitude)])
-      .filter((point) => Number.isFinite(point[0]) && Number.isFinite(point[1]))
+      .filter(([lng, lat]) => isValidCoordinatePair(lng, lat))
   }
 
   const current = getCurrentPosition()
@@ -176,7 +188,6 @@ async function setupMap() {
     })
 
     polyline = new AMap.Polyline({
-      path: [],
       strokeColor: '#4f7b99',
       strokeWeight: 4,
       strokeOpacity: 0.88,
@@ -204,31 +215,22 @@ watch(
   { immediate: true, deep: true }
 )
 
-watch([motionX, motionY, motionZ], () => {
-  const x = Number(motionX.value?.value) || 0
-  const y = Number(motionY.value?.value) || 0
-  const z = Number(motionZ.value?.value) || 0
-  const magnitude = Math.sqrt(x * x + y * y + z * z)
-  if (lastMagnitude.value > 0 && Math.abs(magnitude - lastMagnitude.value) > STEP_THRESHOLD) {
-    stepCount.value += 1
-  }
-  lastMagnitude.value = magnitude
-})
-
 watch([longitude, latitude, locationTrack], () => {
   updateTrack()
 }, { deep: true })
 
 onMounted(async () => {
-  await refreshAll()
-  startPolling()
+  await Promise.all([refreshTelemetryBundle(), refreshEmotionBundle()])
+  startTelemetryPolling()
+  startEmotionPolling()
   await nextTick()
   initHrChart()
   await setupMap()
 })
 
 onBeforeUnmount(() => {
-  stopPolling()
+  stopTelemetryPolling()
+  stopEmotionPolling()
   hrChart?.dispose()
   hrChart = null
   if (map) {
@@ -375,7 +377,7 @@ onBeforeUnmount(() => {
         <article class="summary-card">
           <span class="summary-label">今日步数</span>
           <strong>{{ stepCount }}</strong>
-          <span class="summary-foot">根据运动传感器估算</span>
+          <span class="summary-foot">由服务端根据首页计步口径统计</span>
         </article>
 
         <article class="summary-card">
@@ -388,336 +390,4 @@ onBeforeUnmount(() => {
   </main>
 </template>
 
-<style scoped>
-.collar-page {
-  max-width: var(--page-max-width);
-  margin: 0 auto;
-  padding: calc(env(safe-area-inset-top, 0px) + 18px) 16px calc(var(--tab-height) + var(--safe-bottom) + 38px);
-}
-
-.hero-card,
-.metric-card,
-.map-card,
-.summary-card,
-.section-block {
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  box-shadow: var(--color-shadow);
-}
-
-.hero-card {
-  border-radius: 16px;
-  padding: 14px 16px 12px;
-  margin-bottom: 14px;
-}
-
-.hero-main {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.avatar {
-  width: 42px;
-  height: 42px;
-  border-radius: 10px;
-  background: var(--color-surface-muted);
-  color: #7e6a57;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.hero-copy {
-  flex: 1;
-  min-width: 0;
-}
-
-.hero-copy h1 {
-  font-size: 22px;
-  line-height: 1.05;
-  margin-bottom: 3px;
-}
-
-.hero-copy p {
-  color: var(--color-text-secondary);
-  font-size: 13px;
-}
-
-.status-pill,
-.meta-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 30px;
-  padding: 0 11px;
-  border-radius: 12px;
-  background: var(--color-surface-muted);
-  color: var(--color-text);
-  font-size: 12px;
-}
-
-.status-pill {
-  border: 1px solid var(--color-divider);
-  flex-shrink: 0;
-}
-
-.status-dot,
-.meta-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--color-text-muted);
-}
-
-.is-online .status-dot,
-.meta-dot {
-  background: var(--color-success);
-}
-
-.is-connecting .status-dot {
-  background: var(--color-warning);
-}
-
-.is-offline .status-dot {
-  background: var(--color-text-muted);
-}
-
-.hero-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 10px;
-}
-
-.meta-note {
-  color: var(--color-text-muted);
-  font-size: 12px;
-}
-
-.error-bar {
-  margin-bottom: 14px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(219, 106, 98, 0.14);
-  background: rgba(219, 106, 98, 0.08);
-  color: #b8534d;
-  font-size: 13px;
-}
-
-.section-block {
-  border-radius: 16px;
-  padding: 16px;
-  margin-bottom: 14px;
-}
-
-.health-section {
-  padding: 14px 14px 12px;
-}
-
-.section-heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.section-heading h2 {
-  font-size: 18px;
-  line-height: 1.2;
-}
-
-.health-grid {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
-  gap: 10px;
-}
-
-.metric-card {
-  border-radius: 14px;
-  padding: 12px;
-}
-
-.metric-card-wide {
-  padding-bottom: 6px;
-}
-
-.compact-card {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-height: 108px;
-}
-
-.metric-top {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.metric-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.icon-heart {
-  background: rgba(213, 106, 106, 0.12);
-  color: #d56a6a;
-}
-
-.icon-spo2 {
-  background: rgba(91, 156, 247, 0.12);
-  color: #5b9cf7;
-}
-
-.icon-weight {
-  background: rgba(126, 150, 174, 0.12);
-  color: #70839a;
-}
-
-.metric-title {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--color-text-secondary);
-  font-size: 13px;
-}
-
-.metric-value-row {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-}
-
-.metric-value-row strong {
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.metric-value-row span {
-  color: var(--color-text-muted);
-  font-size: 12px;
-}
-
-.hr-chart {
-  height: 52px;
-  margin-top: 6px;
-}
-
-.map-card {
-  border-radius: 14px;
-  overflow: hidden;
-}
-
-.map-panel {
-  position: relative;
-  height: 148px;
-  background: linear-gradient(180deg, #eef1ee 0%, #ecefed 100%);
-}
-
-.map-panel.empty {
-  display: flex;
-}
-
-.map-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  background: rgba(247, 246, 242, 0.9);
-  color: var(--color-text-secondary);
-  z-index: 1;
-}
-
-.map-overlay span {
-  max-width: 220px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--color-text-muted);
-}
-
-.map-meta {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  padding: 12px 14px 14px;
-}
-
-.map-meta-item span {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--color-text-muted);
-  font-size: 12px;
-}
-
-.map-meta-item strong {
-  font-size: 14px;
-}
-
-.summary-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.summary-card {
-  border-radius: 14px;
-  padding: 14px;
-}
-
-.summary-label {
-  display: block;
-  margin-bottom: 10px;
-  color: var(--color-text-secondary);
-  font-size: 13px;
-}
-
-.summary-card strong {
-  display: block;
-  font-size: 28px;
-  line-height: 1.1;
-}
-
-.summary-foot {
-  display: block;
-  margin-top: 8px;
-  color: var(--color-text-muted);
-  font-size: 12px;
-}
-
-@media (max-width: 520px) {
-  .hero-main {
-    gap: 10px;
-  }
-
-  .status-pill {
-    min-width: 72px;
-    justify-content: center;
-  }
-
-  .metric-card {
-    padding: 10px;
-  }
-
-  .metric-value-row strong {
-    font-size: 20px;
-  }
-
-  .map-meta {
-    gap: 8px;
-  }
-
-  .map-meta-item strong {
-    font-size: 13px;
-  }
-}
-</style>
+<style scoped src="./CollarView.css"></style>
