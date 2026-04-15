@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(tail:*)"
+      "Bash(tail:*)",
+      "Bash(netstat -ano)",
+      "Bash(gh repo:*)",
+      "Bash(gh api:*)",
+      "WebSearch",
+      "Bash(claude plugin:*)",
+      "Bash(git ls-remote:*)",
+      "Bash(python:*)"
     ]
   }
 }
