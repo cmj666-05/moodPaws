@@ -1,0 +1,155 @@
+.pet-digital-archive {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pet-digital-archive .pets-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px 6px 10px;
+  align-content: start;
+}
+
+.pet-digital-archive .pet-card {
+  position: relative;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 20px;
+  padding: clamp(12px, 1.55vh, 14px);
+  border: 3px solid #ff9a9e;
+  box-shadow: 0 8px 32px rgba(255, 154, 158, 0.2);
+  transition: all 0.3s ease;
+  cursor: default;
+}
+
+.pet-digital-archive .pet-card:hover {
+  transform: translateY(-3px) rotate(0.6deg);
+  box-shadow: 0 12px 40px rgba(255, 154, 158, 0.4);
+  border-color: #ff6b9d;
+}
+
+.pet-digital-archive .pet-card-body {
+  position: relative;
+  z-index: 1;
+}
+
+.pet-digital-archive .pet-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.pet-digital-archive .pet-header h3 {
+  font-size: clamp(1.14rem, 2.05vh, 1.32rem);
+  color: #ff6b9d;
+  text-shadow: 1px 1px 0 #fff;
+}
+
+.pet-digital-archive .status {
+  padding: 4px 11px;
+  border-radius: 20px;
+  font-size: clamp(0.72rem, 1.28vh, 0.88rem);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pet-digital-archive .status.active {
+  background: rgba(0, 255, 128, 0.2);
+  color: #00b86b;
+}
+
+.pet-digital-archive .status.completed {
+  background: rgba(110, 198, 255, 0.18);
+  color: #3a6d93;
+  border: 1px solid rgba(110, 198, 255, 0.22);
+}
+
+.pet-digital-archive .pet-info {
+  margin-bottom: 8px;
+}
+
+.pet-digital-archive .info-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 10px;
+  border: 1px solid #a8edea;
+}
+
+.pet-digital-archive .info-item label {
+  font-weight: 600;
+  color: #6b6b6b;
+  font-size: clamp(0.76rem, 2.28vh, 0.82rem);
+}
+
+.pet-digital-archive .info-item span {
+  color: #4a4a4a;
+  font-weight: 600;
+  font-size: clamp(0.76rem, 2.28vh, 0.82rem);
+  text-align: right;
+}
+
+.pet-digital-archive .medical-history {
+  border-top: 2px solid #ff9a9e;
+  padding-top: 12px;
+}
+
+.pet-digital-archive .medical-history h4 {
+  font-size: clamp(0.88rem, 2.48vh, 0.96rem);
+  color: #ff6b9d;
+  margin-bottom: 8px;
+}
+
+.pet-digital-archive .medical-history ul {
+  list-style: none;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 10px;
+  padding: 8px;
+  border: 1px solid #a8edea;
+  max-height: clamp(86px, 22vh, 118px);
+  overflow: auto;
+}
+
+.pet-digital-archive .medical-history li {
+  padding: 4px 0;
+  border-bottom: 1px solid #a8edea;
+  font-size: clamp(0.74rem, 1.22vh, 0.8rem);
+}
+
+.pet-digital-archive .medical-history li:last-child {
+  border-bottom: none;
+}
+
+@media (max-width: 768px) {
+  .pet-digital-archive .pets-container {
+    grid-template-columns: 1fr;
+  }
+
+  .pet-digital-archive .pet-card {
+    padding: 11px;
+  }
+
+  .pet-digital-archive .pet-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .pet-digital-archive .info-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .pet-digital-archive .info-item span {
+    text-align: left;
+  }
+}
