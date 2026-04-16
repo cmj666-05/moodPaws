@@ -9,8 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 构建 Web 资源：`pnpm build`
 - 本地预览构建产物：`pnpm preview`
 - 运行 MQTT 连通性脚本：`pnpm test:aliyun`
-- 运行指定 MQTT 测试模式：`node scripts/test-aliyun-mqtt.mjs web-wss`
-- 运行另一个 MQTT 测试模式：`node scripts/test-aliyun-mqtt.mjs legacy-device-tcp`
+- 运行指定 MQTT 测试模式：`node moodpaws-server/scripts/test-aliyun-mqtt.mjs web-wss`
+- 运行另一个 MQTT 测试模式：`node moodpaws-server/scripts/test-aliyun-mqtt.mjs legacy-device-tcp`
 
 ## 项目结构
 
@@ -51,19 +51,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 注意：
 
-- MQTT 相关代码仍保留在仓库中，但**不再是当前页面主流程**。
+- MQTT 相关代码主要保留在 `moodpaws-server/` 与 `moodpaws-server/scripts/test-aliyun-mqtt.mjs`，**前端已不再保留 MQTT 直连代码，也不再作为当前页面主流程**。
 - 当前社交过渡页会复用 `usePetApi()` 的状态、指标分组与原始 payload 调试信息。
 - 当前宠舍页仍以本地假数据首版为主，尚未全面接入真实 API。
 
-### 3. 设备 payload 会先被归一化再渲染
+### 3. 设备数据主要由后端归一化后再渲染
 
-`src/utils/pet-house-parser.js` 是数据模型转换的关键文件。它把阿里云 MQTT 消息中的 `items` 字段映射成前端稳定的数据结构：
+当前页面消费的是 `moodpaws-server` 返回的 telemetry/emotion API 数据：
 
-- 按 section 组织为 `pet-house`、`collar-motion`、`collar-health`、`collar-location`
-- 把嵌套字段如 `Collar:XYZ`、`Collar:GPS`、`Collar:XKXY` 拆成页面可直接消费的指标
-- 保留上一帧值，避免某次 payload 缺字段时界面直接掉成空值
-
-新增传感器字段或修改展示卡片时，通常应先改这里的归一化逻辑，再改页面。
+- 后端负责订阅 MQTT、解析 `payload.items` 并产出统一的 `sections`
+- 前端通过 `src/composables/usePetApi.js` 拉取并渲染
+- 如需新增传感器字段或修改指标展示，通常应优先调整 `moodpaws-server/src/mqtt/parser.js` 与对应接口，再改页面
 
 ### 4. 地图与图表是页面内局部能力
 

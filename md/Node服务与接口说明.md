@@ -83,10 +83,10 @@ pnpm start
 
 - `3001`
 
-服务启动后可访问：
+服务启动后可访问（后端监听 `0.0.0.0`）：
 
 - 本机调试：`http://localhost:3001/api/health`
-- 已部署服务器：`http://47.109.193.139:3001/api/health`
+- 局域网调试：`http://10.255.115.243:3001/api/health`
 
 ---
 
@@ -163,6 +163,15 @@ CORS_ORIGIN=*
 - `PetHouse:VOC`
 - `PetHouse:MQ135`
 - `PetHouse:Weight`
+- `PetHouse:Mood`
+
+其中 `PetHouse:Mood` 的枚举含义为：
+
+- `1` -> `angry` -> `生气`
+- `2` -> `anxious` -> `焦虑`
+- `3` -> `happy` -> `开心`
+- `4` -> `lonely` -> `孤独`
+- `5` -> `sad` -> `难过`
 
 > 当前标准物模型接入只保证以上 `PetHouse:*` 指标。旧的 `X/Y/Z`、`HeartRate`、`SPO2`、`Longitude`、`Latitude` 不在本次标准 Topic 接入范围内。
 
@@ -204,6 +213,15 @@ CORS_ORIGIN=*
 - `PetHouse:VOC`
 - `PetHouse:MQ135`
 - `PetHouse:Weight`
+- `PetHouse:Mood`
+
+其中 `PetHouse:Mood` 当前按以下规则映射并复用于 `/api/emotion/latest`：
+
+- `1` -> `angry` -> `生气`
+- `2` -> `anxious` -> `焦虑`
+- `3` -> `happy` -> `开心`
+- `4` -> `lonely` -> `孤独`
+- `5` -> `sad` -> `难过`
 
 ### 6.2 项圈扩展字段
 
@@ -258,8 +276,9 @@ CORS_ORIGIN=*
 
 补充说明：
 
-- 页面展示用的 `sections` 当前优先取最近一条 `device_name = Collar` 的消息，以保证首页心率、定位、运动指标稳定显示。
-- `receivedAt` 与 `topic` 仍反映最近一条总体 telemetry 消息时间，可用于判断链路是否持续有新消息。
+- 页面展示用的 `sections` 会先合并最近一条 `device_name = Collar` 与 `device_name = DogHouse` 的消息。
+- 如果某个指标在这两条最新消息里缺失，服务端会再用 `metric_points` 中该指标最近一次有效值回填，避免首页因为不同设备上报时间错开而出现心率、体重二选一掉值。
+- `receivedAt` 与 `topic` 反映最近一条总体 telemetry 消息时间，可用于判断链路是否持续有新消息。
 - `stepCount` 由服务端根据最近一段 `X/Y/Z` 历史样本按首页原有口径计算：先计算三轴模长，再在相邻样本模长差值大于阈值 `1.2` 时计一步。
 
 ### 7.3 获取最近原始消息
@@ -293,9 +312,15 @@ CORS_ORIGIN=*
 
 用途：
 
-- 给情绪页提供统一接口
+- 给情绪页与项圈页提供统一情绪接口
 
-当前返回 mock 情绪数据。
+当前接口采用“telemetry 实时 Mood 优先、emotion snapshot 兜底其余字段”的聚合方式。
+
+补充说明：
+
+- 当最新 telemetry 中存在 `PetHouse:Mood` 时，`currentMood` 会优先使用实时设备值映射后的中文文案
+- `score`、`voice`、`fluctuation`、`history` 仍沿用 `emotion_snapshots` 中的快照数据
+- 当 telemetry 暂无 `PetHouse:Mood` 时，接口会回退到原有 snapshot/mock 行为
 
 ---
 
@@ -306,9 +331,9 @@ CORS_ORIGIN=*
 1. 服务可正常启动
 2. SQLite 数据库可自动创建
 3. `/api/health` 可正常返回
-4. `/api/emotion/latest` 可正常返回 mock 数据
+4. `/api/emotion/latest` 可在存在 `PetHouse:Mood` telemetry 时优先返回实时情绪，同时保留 snapshot 的分数与摘要字段
 5. `/api/telemetry/latest`、`/api/telemetry/messages` 在无真实 MQTT 消息时可正常返回空结果
-6. 前端 `src/App.vue` 已将 `house` tab 挂接到 `SocialView`，`social` tab 挂接到 `DashboardView`
+6. 前端 `src/App.vue` 已将 `house` tab 挂接到 `DashboardView`，`social` tab 挂接到 `SocialView`
 7. 前端 `src/views/dashboard/DashboardView.vue`、`src/views/collar/CollarView.vue`、`src/views/emotion/EmotionView.vue` 已改为通过 `src/composables/usePetApi.js` 请求后端 API
 8. 前端已执行 `pnpm build` 并构建成功
 9. 使用当前 `.env` 启动后，`/api/health` 已稳定返回 `mqtt.enabled = true`、`mqtt.connected = true`、`mqtt.subscribed = true`
@@ -331,12 +356,12 @@ CORS_ORIGIN=*
 
 前端通过 `src/config/api.js` 读取 API 地址，默认值为：
 
-- `http://47.109.193.139:3001/api`
+- `http://10.255.115.243:3001/api`
 
 推荐在项目根目录创建 `.env.local`（或 `.env`）覆盖：
 
 ```env
-VITE_API_BASE_URL=http://47.109.193.139:3001/api
+VITE_API_BASE_URL=http://10.255.115.243:3001/api
 VITE_API_POLL_INTERVAL=5000
 ```
 
@@ -344,31 +369,31 @@ VITE_API_POLL_INTERVAL=5000
 
 - `.env.example`
 
-本机联调时可改为：
+本机联调或同一局域网设备访问时可改为：
 
-- `VITE_API_BASE_URL=http://localhost:3001/api`
+- `VITE_API_BASE_URL=http://10.255.115.243:3001/api`
 
 Android 安装包如果直接访问当前服务器 HTTP 接口，已在原生层放行：
 
-- 当前采用 Android 全局明文 HTTP 放行配置（`usesCleartextTraffic=true` + `network_security_config`）
-- 当前服务器地址：`http://47.109.193.139:3001/api`
+- 当前采用 Android 全局明文 HTTP 放行配置（`usesCleartextTraffic=true` + `network_security_config`），可直接访问局域网 HTTP 接口
+- 当前服务器地址：`http://10.255.115.243:3001/api`
 
 页面接入情况：
 
-- `DashboardView`：当前作为社交过渡页，复用 `/api/telemetry/latest` 的调试信息与状态展示
+- `DashboardView`：当前作为宠舍照护页，聚合环境、看护、生命体征与情绪状态展示
 - `CollarView`：读取 `/api/telemetry/latest`、`/api/telemetry/metrics/HeartRate/history`、`/api/telemetry/location/track`、`/api/emotion/latest`
 - `EmotionView`：读取 `/api/emotion/latest`
-- `SocialView`：当前为宠舍照护页首版，仍以本地假数据为主，尚未全面接入 API
+- `SocialView`：当前作为社交开发中过渡页
 
-旧前端 MQTT 代码（如 `src/composables/useMqtt.js`、`src/services/mqtt/*`）当前按“保留一版、先不启用”的策略处理，页面主流程已不再直接依赖它们。
+旧前端 MQTT 代码（如 `src/composables/useMqtt.js`、`src/services/mqtt/*`）与前端解析文件 `src/utils/pet-house-parser.js` 已从仓库删除；页面主流程当前完全通过 `usePetApi -> moodpaws-server` 获取数据。
 
 ### 9.2 下一步优先做的事
 
 1. 启动 `moodpaws-server`
 2. 访问 `/api/health` 确认 MQTT 已连接并已订阅
 3. 访问 telemetry 相关接口确认真实消息已入库
-4. 启动前端，联调 Collar / Emotion / 社交过渡页
-5. 逐步把宠舍页从本地假数据替换为真实 API 数据
+4. 启动前端，联调 Collar / Emotion / 宠舍页
+5. 后续按需要继续推进社交功能开发
 
 ### 9.3 前端可优先对接的接口
 
@@ -397,7 +422,6 @@ Android 安装包如果直接访问当前服务器 HTTP 接口，已在原生层
 - 分页查询
 - 删除/清理历史数据
 - WebSocket / SSE 实时推送
-- 旧前端 MQTT 文件与 `mqtt` 依赖的物理删除（当前仍保留一版）
 - 真实 NFC 社交流程
 - 宠舍页真实 API 全量接入
 

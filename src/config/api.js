@@ -1,4 +1,4 @@
-const defaultBaseUrl = 'http://47.109.193.139:3001/api'
+const defaultBaseUrl = 'http://10.255.115.243:3001/api'
 
 export const apiConfig = {
   baseUrl: import.meta.env.VITE_API_BASE_URL || defaultBaseUrl,

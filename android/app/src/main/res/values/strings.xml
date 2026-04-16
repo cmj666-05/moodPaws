@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Pet-IoT</string>
-    <string name="title_activity_main">Pet-IoT</string>
-    <string name="package_name">com.pet.iot</string>
-    <string name="custom_url_scheme">com.pet.iot</string>
+    <string name="app_name">moodPaws</string>
+    <string name="title_activity_main">moodPaws</string>
+    <string name="package_name">com.moodpaws.app</string>
+    <string name="custom_url_scheme">com.moodpaws.app</string>
 </resources>

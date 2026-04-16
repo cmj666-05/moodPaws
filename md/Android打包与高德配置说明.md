@@ -4,7 +4,7 @@
 
 本项目主要运行环境为 **Android App**。
 
-技术栈为 `Vite + Vue 3 + Capacitor`，由于考虑到跨端 MQTT `clientId` 互踢问题及阿里云 CORS 限制，本项目不再兼容 Web 端，仅支持通过 Capacitor 构建后的安卓原生环境。
+技术栈为 `Vite + Vue 3 + Capacitor`。当前页面正式数据链路走 `usePetApi -> moodpaws-server`；Android 仍是主要运行环境，但 Web 端也可用于页面联调与 UI 预览。
 
 ## 2. 当前高德配置
 
@@ -57,7 +57,7 @@
 
 ## 4. 当前正式签名信息
 
-- 包名：`com.pet.iot`
+- 包名：`com.moodpaws.app`
 - SHA1：`02:5F:06:41:C6:1F:36:FB:E8:06:31:60:A8:EE:1C:36:46:CE:BB:F5`
 
 规则：

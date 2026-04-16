@@ -37,10 +37,10 @@ const {
   loading,
   errorMessage,
   latestTelemetry,
-  metricSections,
   heartRateHistory,
   locationTrack,
   emotion,
+  homeMetrics,
   refreshAll,
   refreshTelemetryBundle,
   refreshEmotionBundle,
@@ -57,19 +57,14 @@ let map = null
 let marker = null
 let polyline = null
 
-function getMetric(sectionKey, metricKey) {
-  const section = metricSections.value?.find((item) => item.key === sectionKey)
-  return section?.metrics?.find((item) => item.key === metricKey)
-}
-
-const heartRate = computed(() => getMetric('collar-health', 'HeartRate'))
-const spo2 = computed(() => getMetric('collar-health', 'SPO2'))
-const weight = computed(() => getMetric('pet-house', 'PetHouse:Weight'))
-const motionX = computed(() => getMetric('collar-motion', 'X'))
-const motionY = computed(() => getMetric('collar-motion', 'Y'))
-const motionZ = computed(() => getMetric('collar-motion', 'Z'))
-const longitude = computed(() => getMetric('collar-location', 'Longitude'))
-const latitude = computed(() => getMetric('collar-location', 'Latitude'))
+const heartRate = computed(() => homeMetrics.value.heartRate)
+const spo2 = computed(() => homeMetrics.value.spo2)
+const weight = computed(() => homeMetrics.value.weight)
+const motionX = computed(() => homeMetrics.value.motionX)
+const motionY = computed(() => homeMetrics.value.motionY)
+const motionZ = computed(() => homeMetrics.value.motionZ)
+const longitude = computed(() => homeMetrics.value.longitude)
+const latitude = computed(() => homeMetrics.value.latitude)
 
 const petMood = computed(() => emotion.value.currentMood || '开心')
 const stepCount = computed(() => Number(latestTelemetry.value?.stepCount) || 0)
@@ -80,7 +75,7 @@ const hrHistory = ref([])
 
 let hrChart = null
 
-const isOnline = computed(() => Boolean(latestTelemetry.value?.isOnline && metricSections.value?.length > 0))
+const isOnline = computed(() => Boolean(latestTelemetry.value?.isOnline && latestTelemetry.value.sections?.length > 0))
 const isConnecting = computed(() => loading.value && !latestTelemetryAt.value)
 const isWeb = !Capacitor.isNativePlatform()
 

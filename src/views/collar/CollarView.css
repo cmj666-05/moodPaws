@@ -46,12 +46,6 @@
 .hero-copy h1 {
   font-size: 22px;
   line-height: 1.05;
-  margin-bottom: 3px;
-}
-
-.hero-copy p {
-  color: var(--color-text-secondary);
-  font-size: 13px;
 }
 
 .status-pill,
@@ -99,11 +93,6 @@
   gap: 8px;
   flex-wrap: wrap;
   margin-top: 10px;
-}
-
-.meta-note {
-  color: var(--color-text-muted);
-  font-size: 12px;
 }
 
 .error-bar {
@@ -294,13 +283,6 @@
   display: block;
   font-size: 28px;
   line-height: 1.1;
-}
-
-.summary-foot {
-  display: block;
-  margin-top: 8px;
-  color: var(--color-text-muted);
-  font-size: 12px;
 }
 
 @media (max-width: 520px) {

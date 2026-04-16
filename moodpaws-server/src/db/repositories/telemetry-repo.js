@@ -40,6 +40,27 @@ export function getLatestMessageByDeviceName(deviceName) {
   )
 }
 
+export function listLatestMetricPoints(metricKeys) {
+  if (!Array.isArray(metricKeys) || metricKeys.length === 0) {
+    return Promise.resolve([])
+  }
+
+  const placeholders = metricKeys.map(() => '?').join(', ')
+
+  return all(
+    `SELECT metric_key, value_num, value_text, ts
+     FROM metric_points AS current
+     WHERE current.metric_key IN (${placeholders})
+       AND current.ts = (
+         SELECT MAX(latest.ts)
+         FROM metric_points AS latest
+         WHERE latest.metric_key = current.metric_key
+       )
+     ORDER BY current.ts DESC`,
+    metricKeys
+  )
+}
+
 export function listRecentMessages(limit) {
   return all(
     `SELECT id, topic, device_name, request_id, gmt_create, received_at

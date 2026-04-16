@@ -9,14 +9,14 @@
 | 移除 X/Y/Z 原始显示 | 不再直接展示三轴加速度计的 X、Y、Z 原始值 |
 | 新增步数估算 | 基于加速度计向量幅度变化（`√(x²+y²+z²)`）检测步数 |
 | 缩小顶部摘要卡 | 头像 64px→48px，移除 Android 提示文字，缩减 padding 和间距 |
-| 移除 Android 平台限制 | `isAndroidRuntime` 替换为 `isNative/isWeb`，地图和 MQTT 不再检测平台 |
+| 移除 Android 平台限制 | `isAndroidRuntime` 替换为 `isNative/isWeb`，地图不再检测平台 |
 
 ### 跨平台兼容
 
-| 运行环境 | 高德地图 | MQTT 连接 | 说明 |
+| 运行环境 | 高德地图 | 页面数据链路 | 说明 |
 |:---|:---|:---|:---|
-| Web 浏览器 | ✅ 正常加载 | ⚠️ 受阿里云 CORS 限制 | 地图可用，MQTT 可能连不上 |
-| Android WebView | ✅ 正常加载 | ✅ 正常连接 | 两者均可用 |
+| Web 浏览器 | ✅ 正常加载 | ✅ 通过 `usePetApi -> moodpaws-server` | 适合前端联调与 UI 调试 |
+| Android WebView | ✅ 正常加载 | ✅ 通过 `usePetApi -> moodpaws-server` | 两者均可用 |
 
 ### 文件改动清单
 
@@ -33,12 +33,7 @@
 
 ### Step 2: 基础设施建设
 
-| 文件 | 类型 | 说明 |
-|------|------|------|
-| [src/services/mqtt/config.js](file:///d:/desktop/moodPaws/src/services/mqtt/config.js) | NEW | MQTT 连接配置（Broker URL、petInfo 三元组、Topic） |
-| [src/services/mqtt/client.js](file:///d:/desktop/moodPaws/src/services/mqtt/client.js) | NEW | MQTT 客户端工厂（WSS 连接、事件代理） |
-| [src/composables/useMqtt.js](file:///d:/desktop/moodPaws/src/composables/useMqtt.js) | NEW | Vue Composable（连接状态、订阅、消息解析） |
-| [src/utils/pet-house-parser.js](file:///d:/desktop/moodPaws/src/utils/pet-house-parser.js) | NEW | 消息解析层（PetHouse 平铺 + Collar 嵌套字段兼容） |
+当前前端 MQTT 直连文件已删除；页面层现通过 `usePetApi -> moodpaws-server` 获取数据。
 
 ### Step 3: 页面结构
 
@@ -56,33 +51,29 @@
 
 ## 最终项目结构
 
-```
+```text
 moodPaws/
 ├── src/
 │   ├── App.vue               # 主壳 + Tab 导航
 │   ├── main.js               # 入口
-│   ├── style.css              # 全局样式
+│   ├── style.css             # 全局样式
 │   ├── composables/
-│   │   └── useMqtt.js         # MQTT Vue Composable
+│   │   └── usePetApi.js      # 页面 API 数据入口
 │   ├── config/
-│   │   └── amap.js            # 高德地图配置
+│   │   └── amap.js           # 高德地图配置
 │   ├── services/
-│   │   ├── mqtt/
-│   │   │   ├── client.js      # MQTT 客户端
-│   │   │   └── config.js      # MQTT 连接参数
 │   │   └── amap/
-│   │       └── loader.js      # 高德地图加载器
-│   ├── utils/
-│   │   └── pet-house-parser.js # 双设备消息解析
+│   │       └── loader.js     # 高德地图加载器
 │   └── views/
 │       └── collar/
-│           └── CollarView.vue  # 项圈首页
-├── android/                    # Capacitor Android 工程
-├── md/                         # 项目文档
-├── scripts/                    # 测试脚本
+│           └── CollarView.vue # 项圈首页
+├── moodpaws-server/          # 后端 MQTT 订阅 + API
+├── android/                  # Capacitor Android 工程
+├── md/                       # 项目文档
+├── scripts/                  # 联通性测试脚本
 ├── vite.config.js
 └── package.json
 ```
 
 > [!IMPORTANT]
-> MQTT 连接方式为 WSS，Web 端和 Android 端使用完全相同的代码。Web 端可能因阿里云 CORS 限制无法直连 Broker。
+> 当前页面正式数据链路为 `usePetApi -> moodpaws-server`。MQTT 保留在后端与测试脚本侧，不再由前端页面直连。

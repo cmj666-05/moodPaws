@@ -41,22 +41,9 @@
   flex: 1;
 }
 
-.eyebrow {
-  display: inline-block;
-  margin-bottom: 4px;
-  color: var(--color-text-muted);
-  font-size: 11px;
-}
-
 .hero-copy h1 {
   font-size: 24px;
   line-height: 1.1;
-  margin-bottom: 2px;
-}
-
-.hero-copy p {
-  color: var(--color-text-secondary);
-  font-size: 13px;
 }
 
 .mood-pill,

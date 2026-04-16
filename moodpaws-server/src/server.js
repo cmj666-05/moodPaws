@@ -170,8 +170,8 @@ async function bootstrap() {
 
   mqttState.enabled = subscriber.enabled
 
-  const server = app.listen(env.port, () => {
-    console.log(`moodpaws-server listening on http://localhost:${env.port}`)
+  const server = app.listen(env.port, '0.0.0.0', () => {
+    console.log(`moodpaws-server listening on http://0.0.0.0:${env.port}`)
   })
 
   const shutdown = () => {

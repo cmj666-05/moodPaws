@@ -1,4 +1,4 @@
-package com.pet.iot;
+package com.moodpaws.app;
 
 import com.getcapacitor.BridgeActivity;
 

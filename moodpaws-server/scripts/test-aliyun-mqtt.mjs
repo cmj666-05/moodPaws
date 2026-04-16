@@ -1,4 +1,4 @@
-﻿import crypto from 'node:crypto'
+import crypto from 'node:crypto'
 import mqtt from 'mqtt'
 
 const mode = process.argv[2] || 'web-wss'

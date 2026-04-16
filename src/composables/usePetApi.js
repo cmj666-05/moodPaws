@@ -47,6 +47,17 @@ export function usePetApi() {
   ])
 
   const metricSections = computed(() => latestTelemetry.value.sections || [])
+  const metricMap = computed(() => createMetricMap(metricSections.value))
+  const homeMetrics = computed(() => ({
+    heartRate: metricMap.value.HeartRate,
+    spo2: metricMap.value.SPO2,
+    weight: metricMap.value['PetHouse:Weight'],
+    longitude: metricMap.value.Longitude,
+    latitude: metricMap.value.Latitude,
+    motionX: metricMap.value.X,
+    motionY: metricMap.value.Y,
+    motionZ: metricMap.value.Z
+  }))
   const rawPayloadText = computed(() =>
     latestTelemetry.value.raw ? JSON.stringify(latestTelemetry.value.raw, null, 2) : ''
   )
@@ -74,7 +85,7 @@ export function usePetApi() {
     if (data && typeof data === 'object') {
       latestTelemetry.value = {
         source: data.source || latestTelemetry.value.source,
-        sections: data.sections || latestTelemetry.value.sections,
+        sections: mergeMetricSections(latestTelemetry.value.sections, data.sections),
         raw: data.raw ?? latestTelemetry.value.raw,
         topic: data.topic || latestTelemetry.value.topic,
         receivedAt: data.receivedAt || latestTelemetry.value.receivedAt,
@@ -255,6 +266,8 @@ export function usePetApi() {
     emotion,
     sourceSummary,
     metricSections,
+    metricMap,
+    homeMetrics,
     rawPayloadText,
     statusText,
     refreshAll,
@@ -272,6 +285,35 @@ export function usePetApi() {
     startEmotionPolling,
     stopEmotionPolling
   }
+}
+
+function createMetricMap(sections = []) {
+  return sections
+    .flatMap((section) => section.metrics || [])
+    .reduce((result, metric) => {
+      result[metric.key] = metric
+      return result
+    }, {})
+}
+
+function mergeMetricSections(previousSections = [], nextSections = []) {
+  if (!Array.isArray(nextSections) || nextSections.length === 0) {
+    return previousSections || []
+  }
+
+  const previousMetrics = createMetricMap(previousSections)
+
+  return nextSections.map((section) => ({
+    ...section,
+    metrics: (section.metrics || []).map((metric) => {
+      const hasValue = metric?.value !== undefined && metric?.value !== null && metric?.value !== '--'
+      return hasValue
+        ? metric
+        : previousMetrics[metric.key]
+          ? { ...metric, value: previousMetrics[metric.key].value, time: previousMetrics[metric.key].time }
+          : metric
+    })
+  }))
 }
 
 function formatTime(value) {

@@ -16,9 +16,9 @@ const tabs = [
 
 const tabViews = {
   collar: CollarView,
-  house: SocialView,
+  house: DashboardView,
   emotion: EmotionView,
-  social: DashboardView
+  social: SocialView
 }
 
 const activeComponent = computed(() => tabViews[activeTab.value] ?? null)

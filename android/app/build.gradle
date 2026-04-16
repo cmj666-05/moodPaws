@@ -1,7 +1,7 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "com.pet.iot"
+    namespace = "com.moodpaws.app"
     compileSdk = rootProject.ext.compileSdkVersion
 
     signingConfigs {
@@ -14,7 +14,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.pet.iot"
+        applicationId "com.moodpaws.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

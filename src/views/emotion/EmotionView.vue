@@ -15,20 +15,12 @@ const voiceChartEl = ref(null)
 const fluctuationChartEl = ref(null)
 
 const {
-  loading,
   errorMessage,
   emotion,
-  refreshEmotion,
   refreshEmotionBundle,
   startEmotionPolling,
   stopEmotionPolling
 } = usePetApi()
-
-const petProfile = {
-  name: 'Lucky',
-  breed: '金毛寻回犬',
-  age: '3 岁'
-}
 
 const currentMood = computed(() => emotion.value.currentMood || '开心')
 const emotionScore = computed(() => Number(emotion.value.score) || 0)
@@ -39,7 +31,7 @@ const fluctuationMetrics = computed(() => emotion.value.fluctuation?.values || [
 const moodHistory = computed(() => emotion.value.history || [])
 
 const analysisSlides = [
-  { key: 'voice', title: '声线分析', subtitle: '频率与音调趋势' },
+  { key: 'voice', title: '声音分析', subtitle: '频率与音调趋势' },
   { key: 'posture', title: '姿态识别', subtitle: '查看全天情绪波动趋势' }
 ]
 
@@ -343,11 +335,9 @@ onBeforeUnmount(() => {
     <section class="summary-panel">
       <article class="hero-card">
         <div class="hero-header">
-          <div class="avatar">L</div>
+          <div class="avatar">情</div>
           <div class="hero-copy">
-            <span class="eyebrow">情绪感知</span>
-            <h1>{{ petProfile.name }}</h1>
-            <p>{{ petProfile.breed }} · {{ petProfile.age }}</p>
+            <h1>宠物情绪</h1>
           </div>
           <span class="mood-pill">{{ currentMood }}</span>
         </div>
@@ -371,8 +361,7 @@ onBeforeUnmount(() => {
         </div>
 
         <p class="emotion-current">{{ currentMood }}</p>
-        <p v-if="loading" class="emotion-status">情绪数据刷新中</p>
-        <p v-else-if="errorMessage" class="emotion-status error">{{ errorMessage }}</p>
+        <p v-if="errorMessage" class="emotion-status error">{{ errorMessage }}</p>
       </article>
     </section>
 

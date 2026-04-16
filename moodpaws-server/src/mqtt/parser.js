@@ -1,3 +1,5 @@
+import { getMoodLabel } from '../utils/emotion-mood.js'
+
 const metricSections = [
   {
     key: 'pet-house',
@@ -9,7 +11,8 @@ const metricSections = [
       { key: 'PetHouse:CH2O', label: 'CH2O', unit: 'ppb' },
       { key: 'PetHouse:VOC', label: 'VOC', unit: 'lvl' },
       { key: 'PetHouse:MQ135', label: 'MQ135', unit: 'lvl' },
-      { key: 'PetHouse:Weight', label: 'Weight', unit: 'kg' }
+      { key: 'PetHouse:Weight', label: 'Weight', unit: 'kg' },
+      { key: 'PetHouse:Mood', label: 'Mood', unit: '' }
     ]
   },
   {
@@ -46,7 +49,8 @@ const flatKeys = [
   'PetHouse:CH2O',
   'PetHouse:VOC',
   'PetHouse:MQ135',
-  'PetHouse:Weight'
+  'PetHouse:Weight',
+  'PetHouse:Mood'
 ]
 
 export function parsePayloadText(payloadText, topic = '') {
@@ -67,8 +71,8 @@ export function parsePayloadObject(payload, topic = '') {
     },
     metricPoints: Object.entries(metrics).map(([metricKey, metric]) => ({
       metricKey,
-      valueNum: toNumeric(metric.value),
-      valueText: toNumeric(metric.value) === null ? stringifyValue(metric.value) : null,
+      valueNum: toNumeric(metric.rawValue ?? metric.value),
+      valueText: toNumeric(metric.rawValue ?? metric.value) === null ? stringifyValue(metric.value) : null,
       ts: Number(metric.time) || Number(payload?.gmtCreate) || Number(payload?.id) || Date.now()
     })),
     sections: metricSections.map((section) => ({
@@ -93,7 +97,12 @@ function extractMetricsFromItems(items) {
 
   flatKeys.forEach((key) => {
     if (items[key]) {
-      result[key] = items[key]
+      const nextMetric = { ...items[key] }
+      if (key === 'PetHouse:Mood') {
+        nextMetric.rawValue = items[key].value
+        nextMetric.value = getMoodLabel(items[key].value) ?? items[key].value
+      }
+      result[key] = nextMetric
     }
   })
 

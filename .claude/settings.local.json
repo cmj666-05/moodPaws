@@ -8,7 +8,14 @@
       "WebSearch",
       "Bash(claude plugin:*)",
       "Bash(git ls-remote:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(pnpm build:*)",
+      "Bash(sqlite3:*)",
+      "Bash(node:*)",
+      "Bash(pnpm dev:*)",
+      "Bash(pnpm:*)",
+      "Bash(curl:*)",
+      "Bash(git:*)"
     ]
   }
 }

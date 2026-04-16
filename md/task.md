@@ -5,11 +5,9 @@
 - [x] 确定 UI 配色方案（浅蓝色系：#E0F2FE, #0EA5E9）
 
 ## 2. 基础设施建设
-- [x] 更新全局变量（粉色改蓝色）
-- [x] 引入 `mqtt.js` 及其兼容性处理
-- [x] 编写阿里云 IoT MQTT 连接工具类 [src/services/mqtt/client.js](file:///d:/desktop/moodPaws/src/services/mqtt/client.js)
-- [x] 配置 MQTT 连接参数 [src/services/mqtt/config.js](file:///d:/desktop/moodPaws/src/services/mqtt/config.js)
 - [x] 高德地图配置与加载器 [src/config/amap.js](file:///d:/desktop/moodPaws/src/config/amap.js) / [src/services/amap/loader.js](file:///d:/desktop/moodPaws/src/services/amap/loader.js)
+- [x] 前端页面数据入口切换为 `src/composables/usePetApi.js -> moodpaws-server`
+- [x] 删除旧前端 MQTT 直连残留文件（`src/composables/useMqtt.js`、`src/services/mqtt/*`、`src/utils/pet-house-parser.js`）
 
 ## 3. 清理与重排
 - [x] 更新 4 个核心功能 Tab 导航（项圈、寄养屋、情感、社交）

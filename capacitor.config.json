@@ -1,5 +1,5 @@
 {
-  "appId": "com.pet.iot",
-  "appName": "Pet-IoT",
+  "appId": "com.moodpaws.app",
+  "appName": "moodPaws",
   "webDir": "dist"
 }
