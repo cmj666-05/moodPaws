@@ -1,9 +1,9 @@
 import { getLocationTrack, getLatestTelemetry, getMetricHistory, getRecentMessages } from '../services/telemetry-service.js'
 
-function parseLimit(rawValue, fallback) {
+function parseLimit(rawValue, fallback, max = 500) {
   const parsed = Number(rawValue)
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback
-  return Math.min(parsed, 500)
+  return Math.min(parsed, max)
 }
 
 export function registerTelemetryRoutes(router) {
@@ -35,7 +35,7 @@ export function registerTelemetryRoutes(router) {
 
   router.get('/telemetry/location/track', async (request, response, next) => {
     try {
-      const limit = parseLimit(request.query.limit, 1440)
+      const limit = parseLimit(request.query.limit, 1440, 5000)
       response.json(await getLocationTrack(limit))
     } catch (error) {
       next(error)

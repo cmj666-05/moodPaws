@@ -1,0 +1,31 @@
+# Dependencies
+**/node_modules/
+
+# Build outputs
+app/dist/
+app/dist-ssr/
+app/android/.gradle/
+app/android/build/
+app/android/app/build/
+app/android/captures/
+app/android/local.properties
+
+# Local environment files
+.env
+**/.env
+!moodpaws-server/.env.example
+
+# Runtime data
+moodpaws-server/data/*.db
+moodpaws-server/data/*.db-shm
+moodpaws-server/data/*.db-wal
+
+# Local editor / Claude files
+.claude/
+.vscode/
+.idea/
+.DS_Store
+*.log
+
+# Accidental lockfiles from wrong package manager
+app/package-lock.json
