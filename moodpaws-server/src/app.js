@@ -4,7 +4,7 @@ import { env } from './config/env.js'
 import { registerTelemetryRoutes } from './routes/telemetry.routes.js'
 import { registerEmotionRoutes } from './routes/emotion.routes.js'
 
-export function createApp({ mqttState }) {
+export function createApp({ mqttState, serviceState }) {
   const app = express()
   const api = express.Router()
 
@@ -14,8 +14,21 @@ export function createApp({ mqttState }) {
   api.get('/health', (_request, response) => {
     response.json({
       ok: true,
+      service: 'moodpaws-server',
+      serviceId: serviceState.serviceId,
       port: env.port,
       dataMode: env.dataMode,
+      video: {
+        enabled: env.video.enabled,
+        url: env.video.url,
+        origin: env.video.origin,
+        host: env.video.host,
+        port: env.video.port,
+        path: env.video.path
+      },
+      discovery: {
+        ...serviceState.discovery
+      },
       mqtt: {
         enabled: mqttState.enabled,
         connected: mqttState.connected,

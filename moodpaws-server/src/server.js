@@ -4,6 +4,9 @@ import { initSchema } from './db/schema.js'
 import { seedDefaultEmotionSnapshot } from './db/repositories/emotion-repo.js'
 import { createMqttSubscriber } from './mqtt/client.js'
 import { consumeMessage } from './mqtt/consumer.js'
+import { createServiceDiscovery } from './discovery/service-discovery.js'
+import { getAccessibleAddresses } from './utils/network.js'
+import { createServiceId } from './utils/service-id.js'
 
 const mqttState = {
   enabled: false,
@@ -16,6 +19,25 @@ const mqttState = {
   lastConnackCode: null,
   lastDisconnectPacket: null,
   lastSubscribeGranted: []
+}
+
+const serviceState = {
+  serviceId: createServiceId({
+    configuredId: env.service.id,
+    port: env.port,
+    dataMode: env.dataMode
+  }),
+  discovery: {
+    enabled: env.service.mdnsEnabled,
+    published: false,
+    serviceName: env.service.name,
+    serviceType: 'http',
+    healthPath: env.service.healthPath,
+    publishedAt: null,
+    stoppedAt: null,
+    lastError: '',
+    lastEvent: 'idle'
+  }
 }
 
 function maskSecret(secret) {
@@ -36,11 +58,37 @@ function logMqtt(message, extra) {
   console.log(`[mqtt] ${message}`, extra)
 }
 
+function logDiscovery(message, extra) {
+  if (extra === undefined) {
+    console.log(`[discovery] ${message}`)
+    return
+  }
+  console.log(`[discovery] ${message}`, extra)
+}
+
+function logAccessibleAddresses(addresses) {
+  console.log('[server] accessible addresses')
+  for (const item of addresses) {
+    console.log(`- ${item.url}`)
+  }
+  console.log(`[server] health check path: ${env.service.healthPath}`)
+  console.log(`[server] service id: ${serviceState.serviceId}`)
+  if (env.service.mdnsEnabled) {
+    console.log(`[server] mDNS service: ${serviceState.discovery.serviceName}._http._tcp.local`)
+  }
+}
+
 async function bootstrap() {
   await initSchema()
   await seedDefaultEmotionSnapshot()
 
-  const app = createApp({ mqttState })
+  const app = createApp({ mqttState, serviceState })
+  const discovery = createServiceDiscovery({
+    env,
+    port: env.port,
+    serviceId: serviceState.serviceId,
+    discoveryState: serviceState.discovery
+  })
 
   logMqtt('starting subscriber', {
     brokerUrl: env.mqtt.brokerUrl,
@@ -170,11 +218,32 @@ async function bootstrap() {
 
   mqttState.enabled = subscriber.enabled
 
-  const server = app.listen(env.port, '0.0.0.0', () => {
+  const server = app.listen(env.port, '0.0.0.0', async () => {
     console.log(`moodpaws-server listening on http://0.0.0.0:${env.port}`)
+
+    const published = await discovery.start()
+    if (published) {
+      logDiscovery('published mDNS service', discovery.getState())
+    } else if (serviceState.discovery.enabled) {
+      logDiscovery('failed to publish mDNS service', {
+        lastError: serviceState.discovery.lastError
+      })
+    } else {
+      logDiscovery('mDNS disabled')
+    }
+
+    logAccessibleAddresses(getAccessibleAddresses(env.port))
   })
 
-  const shutdown = () => {
+  let shuttingDown = false
+
+  const shutdown = async () => {
+    if (shuttingDown) {
+      return
+    }
+
+    shuttingDown = true
+    await discovery.stop()
     subscriber.client?.end(true)
     server.close(() => process.exit(0))
   }

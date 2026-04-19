@@ -15,6 +15,18 @@ function toNumber(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
+function normalizePath(value, fallback) {
+  const resolved = (value || fallback || '').trim()
+  if (!resolved) return fallback
+  return resolved.startsWith('/') ? resolved : `/${resolved}`
+}
+
+function normalizeUrl(value) {
+  const resolved = (value || '').trim()
+  if (!resolved) return ''
+  return resolved.replace(/\/+$/, '')
+}
+
 const defaultDbPath = path.join(rootDir, 'data', 'moodpaws.db')
 
 const topics = (process.env.MQTT_TOPICS || '/k1wxaEnEO8L/petInfo/user/get')
@@ -27,6 +39,20 @@ export const env = {
   corsOrigin: process.env.CORS_ORIGIN || '*',
   dataMode: process.env.DATA_MODE === 'sqlite' ? 'sqlite' : 'memory',
   dbPath: process.env.DB_PATH || defaultDbPath,
+  service: {
+    id: process.env.SERVICE_ID || '',
+    name: process.env.MDNS_SERVICE_NAME || 'moodpaws-server',
+    mdnsEnabled: toBoolean(process.env.MDNS_ENABLED, true),
+    healthPath: '/api/health'
+  },
+  video: {
+    enabled: toBoolean(process.env.VIDEO_STREAM_ENABLED, true),
+    url: normalizeUrl(process.env.VIDEO_STREAM_URL),
+    origin: normalizeUrl(process.env.VIDEO_STREAM_ORIGIN),
+    host: (process.env.VIDEO_STREAM_HOST || '').trim(),
+    port: toNumber(process.env.VIDEO_STREAM_PORT, 5000),
+    path: normalizePath(process.env.VIDEO_STREAM_PATH, '/video_feed')
+  },
   mqtt: {
     enabled: toBoolean(process.env.ENABLE_MQTT, false),
     brokerUrl: process.env.MQTT_BROKER_URL || '',

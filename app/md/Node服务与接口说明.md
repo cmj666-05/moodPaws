@@ -85,9 +85,16 @@ pnpm start
 
 服务启动后可访问（后端监听 `0.0.0.0`）：
 
-- 本机调试：`http://localhost:3001/api/health`
-- 局域网调试：`http://10.255.115.243:3001/api/health`
+- 本机调试：`http://127.0.0.1:3001/api/health`
+- 局域网调试：以服务启动日志打印出的 IPv4 地址为准，例如 `http://192.168.1.23:3001/api/health`
 
+服务启动时还会额外输出：
+
+- 当前可访问的本机 / 局域网地址列表
+- `serviceId`
+- mDNS 服务名（默认 `moodpaws-server._http._tcp.local`）
+
+> mDNS 发现用于减少换 Wi‑Fi / 热点后的重新配置成本，但不同手机热点、路由器和系统对 `.local`/局域网广播的支持存在差异；若自动发现失败，仍建议回退到服务日志里打印的 LAN 地址。
 ---
 
 ## 4. 环境变量
@@ -97,6 +104,9 @@ pnpm start
 ```env
 PORT=3001
 DB_PATH=./data/moodpaws.db
+MDNS_ENABLED=true
+MDNS_SERVICE_NAME=moodpaws-server
+SERVICE_ID=
 MQTT_BROKER_URL=wss://iot-06z00b1eo2alugk.mqtt.iothub.aliyuncs.com:443/mqtt
 MQTT_TOPICS=/k1wxaEnEO8L/petInfo/user/get
 MQTT_CLIENT_ID=k1wxaEnEO8L.petInfo|securemode=2,signmethod=hmacsha256|
@@ -107,6 +117,9 @@ CORS_ORIGIN=*
 
 说明：
 
+- `MDNS_ENABLED=true` 时，服务启动后会发布 `_http._tcp` 的 mDNS 服务，默认服务名是 `moodpaws-server`
+- `SERVICE_ID` 为空时，服务端会基于主机名/端口/数据模式生成稳定的 `serviceId`
+- `serviceId`、discovery 状态和 MQTT 状态都会出现在 `/api/health`
 - 当前后端通过 `MQTT_TOPICS` 订阅历史上已验证可工作的聚合 Topic `/k1wxaEnEO8L/petInfo/user/get`
 - 当前订阅身份使用 `petInfo`，三元组为 `ProductKey=k1wxaEnEO8L`、`DeviceName=petInfo`
 - `petInfo` 的 HMAC-SHA256 鉴权密码计算结果为 `4f106f7ea256495207f2235389a9e792744eab503918fcf632e633a72ac6bed7`

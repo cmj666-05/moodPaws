@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue'
-import { buildApiUrl, apiConfig } from '../config/api'
+import { apiConfig, fetchApiJson } from '../config/api'
 
 const loading = ref(false)
 const telemetryLoading = ref(false)
@@ -69,11 +69,7 @@ export function usePetApi() {
   })
 
   async function fetchJson(path) {
-    const response = await fetch(buildApiUrl(path))
-    if (!response.ok) {
-      throw new Error(`Request failed: ${response.status}`)
-    }
-    return response.json()
+    return fetchApiJson(path)
   }
 
   function syncLoadingState() {

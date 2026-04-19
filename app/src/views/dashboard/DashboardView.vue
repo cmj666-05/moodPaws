@@ -1,5 +1,6 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { ensureVideoStreamUrl, getVideoStreamUrl } from '../../config/api'
 import { usePetApi } from '../../composables/usePetApi'
 
 const fallbackHouse = {
@@ -7,7 +8,7 @@ const fallbackHouse = {
   name: '当前宠舍',
   petName: '宠物状态',
   petProfile: '已连接',
-  avatar: '🐕',
+  avatar: '🐤',
   notificationCount: 1,
   environment: {
     temperature: { value: 24, status: '舒适', unit: '°C' },
@@ -18,11 +19,7 @@ const fallbackHouse = {
   liveView: {
     hasVideo: true,
     status: '在线看护',
-    videoStreamUrl: 'http://192.168.1.100:5000/video_feed'
-  },
-  vitalSigns: {
-    heartRate: { value: 78, unit: 'BPM', status: '稳定' },
-    weight: { value: 28.6, unit: 'kg', status: '平稳' }
+    videoStreamUrl: ''
   },
   appetite: {
     foodIntake: 75,
@@ -43,11 +40,13 @@ const {
   refreshTelemetryBundle,
   refreshEmotionBundle,
   startTelemetryPolling,
-  startEmotionPolling
+  startEmotionPolling,
+  stopTelemetryPolling,
+  stopEmotionPolling
 } = usePetApi()
 
 const hasVideoError = ref(false)
-const isVideoConnecting = ref(true)
+const isVideoConnecting = ref(false)
 const reconnectAttempt = ref(0)
 
 const allMetrics = computed(() =>
@@ -63,16 +62,19 @@ const temperatureMetric = getMetric(['PetHouse:Temp'])
 const humidityMetric = getMetric(['PetHouse:Humi'])
 const co2Metric = getMetric(['PetHouse:CO2'])
 const airQualityMetric = getMetric(['PetHouse:VOC', 'PetHouse:MQ135'])
+const resolvedVideoStreamUrl = computed(() => getVideoStreamUrl())
 
-const formatMetricDisplay = (metric, fallback) => {
+function formatMetricDisplay(metric, fallback) {
   const value = metric?.value
   const unit = metric?.unit || fallback.unit || ''
+
   if (value === undefined || value === null || value === '') {
     return {
       value: fallback.value,
       unit
     }
   }
+
   return {
     value,
     unit
@@ -89,6 +91,11 @@ const petProfile = computed(() => {
 const selectedHouse = computed(() => ({
   ...fallbackHouse,
   petProfile: petProfile.value,
+  liveView: {
+    ...fallbackHouse.liveView,
+    hasVideo: Boolean(resolvedVideoStreamUrl.value),
+    videoStreamUrl: resolvedVideoStreamUrl.value
+  },
   environment: {
     temperature: {
       value: Number(temperatureMetric.value?.value) || fallbackHouse.environment.temperature.value,
@@ -104,41 +111,82 @@ const selectedHouse = computed(() => ({
   },
   emotion: {
     primary: emotion.value?.currentMood || fallbackHouse.emotion.primary,
-    secondary: errorMessage.value ? '等待恢复' : loading.value ? '同步中' : fallbackHouse.emotion.secondary
+    secondary: errorMessage.value
+      ? '等待恢复'
+      : loading.value
+        ? '同步中'
+        : fallbackHouse.emotion.secondary
   }
 }))
 
 const streamSrc = computed(() => {
   const url = selectedHouse.value.liveView.videoStreamUrl
-  return reconnectAttempt.value === 0 ? url : `${url}${url.includes('?') ? '&' : '?'}t=${reconnectAttempt.value}`
+  if (!url) return ''
+  return reconnectAttempt.value === 0
+    ? url
+    : `${url}${url.includes('?') ? '&' : '?'}t=${reconnectAttempt.value}`
 })
 
 const liveViewStatus = computed(() => {
+  if (!selectedHouse.value.liveView.hasVideo) {
+    if (isVideoConnecting.value) return '搜索中'
+    return loading.value ? '发现视频中' : '无视频源'
+  }
+
   if (isVideoConnecting.value) return '连接中'
   if (hasVideoError.value) return '监控离线'
   return selectedHouse.value.liveView.status
 })
 
-const handleStreamLoad = () => {
+function handleStreamLoad() {
   isVideoConnecting.value = false
   hasVideoError.value = false
 }
 
-const handleStreamError = () => {
+function handleStreamError() {
   isVideoConnecting.value = false
   hasVideoError.value = true
 }
 
-const reconnectStream = () => {
+async function reconnectStream() {
   hasVideoError.value = false
   isVideoConnecting.value = true
+  await ensureVideoStreamUrl({
+    forceDiscovery: true,
+    reason: 'dashboard_manual_reconnect'
+  })
   reconnectAttempt.value += 1
 }
 
+watch(
+  resolvedVideoStreamUrl,
+  (url, previousUrl) => {
+    if (!url) {
+      hasVideoError.value = false
+      isVideoConnecting.value = false
+      reconnectAttempt.value = 0
+      return
+    }
+
+    if (url !== previousUrl) {
+      hasVideoError.value = false
+      isVideoConnecting.value = true
+      reconnectAttempt.value = 0
+    }
+  },
+  { immediate: true }
+)
+
 onMounted(async () => {
   await Promise.all([refreshTelemetryBundle(), refreshEmotionBundle()])
+  await ensureVideoStreamUrl({ reason: 'dashboard_mount' })
   startTelemetryPolling()
   startEmotionPolling()
+})
+
+onBeforeUnmount(() => {
+  stopTelemetryPolling()
+  stopEmotionPolling()
 })
 </script>
 
@@ -238,9 +286,17 @@ onMounted(async () => {
               <span class="video-overlay-text">正在连接监控画面...</span>
             </div>
             <div v-else-if="!selectedHouse.liveView.hasVideo || hasVideoError" class="video-overlay offline">
-              <span class="video-icon">📹</span>
-              <span class="video-overlay-text">监控已离线或无法连接</span>
-              <button type="button" class="reconnect-button" @click="reconnectStream">重新连接</button>
+              <span class="video-icon">📴</span>
+              <span class="video-overlay-text">
+                {{ selectedHouse.liveView.hasVideo ? '监控已离线或无法连接' : '等待发现局域网视频源' }}
+              </span>
+              <button
+                type="button"
+                class="reconnect-button"
+                @click="reconnectStream"
+              >
+                {{ selectedHouse.liveView.hasVideo ? '重新连接' : '重新搜索' }}
+              </button>
             </div>
             <span class="video-badge" :class="{ offline: hasVideoError, connecting: isVideoConnecting }">{{ liveViewStatus }}</span>
           </div>
@@ -253,13 +309,13 @@ onMounted(async () => {
           <div class="appetite-item">
             <div class="appetite-label">食物摄入</div>
             <div class="progress-bar">
-              <div class="progress-fill" :style="{ width: selectedHouse.appetite.foodIntake + '%' }"></div>
+              <div class="progress-fill" :style="{ width: `${selectedHouse.appetite.foodIntake}%` }"></div>
             </div>
           </div>
           <div class="appetite-item">
             <div class="appetite-label">饮水进度</div>
             <div class="progress-bar">
-              <div class="progress-fill water" :style="{ width: selectedHouse.appetite.waterConsumption + '%' }"></div>
+              <div class="progress-fill water" :style="{ width: `${selectedHouse.appetite.waterConsumption}%` }"></div>
             </div>
           </div>
         </div>
