@@ -4,6 +4,32 @@ import { env } from './config/env.js'
 import { registerTelemetryRoutes } from './routes/telemetry.routes.js'
 import { registerEmotionRoutes } from './routes/emotion.routes.js'
 
+function hasConfiguredVideoEndpoint(videoConfig) {
+  return Boolean(videoConfig.url || videoConfig.origin || videoConfig.host)
+}
+
+function buildHealthVideoConfig(request) {
+  if (hasConfiguredVideoEndpoint(env.video)) {
+    return {
+      enabled: env.video.enabled,
+      url: env.video.url,
+      origin: env.video.origin,
+      host: env.video.host,
+      port: env.video.port,
+      path: env.video.path
+    }
+  }
+
+  return {
+    enabled: env.video.enabled,
+    url: '',
+    origin: '',
+    host: request.hostname || '',
+    port: env.video.port,
+    path: env.video.path
+  }
+}
+
 export function createApp({ mqttState, serviceState }) {
   const app = express()
   const api = express.Router()
@@ -18,14 +44,7 @@ export function createApp({ mqttState, serviceState }) {
       serviceId: serviceState.serviceId,
       port: env.port,
       dataMode: env.dataMode,
-      video: {
-        enabled: env.video.enabled,
-        url: env.video.url,
-        origin: env.video.origin,
-        host: env.video.host,
-        port: env.video.port,
-        path: env.video.path
-      },
+      video: buildHealthVideoConfig(_request),
       discovery: {
         ...serviceState.discovery
       },

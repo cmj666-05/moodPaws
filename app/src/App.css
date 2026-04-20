@@ -97,3 +97,38 @@
   font-weight: 600;
   line-height: 1.2;
 }
+
+.server-fab {
+  position: fixed;
+  right: 16px;
+  bottom: calc(var(--tab-height) + var(--safe-bottom) + 22px);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px 0 12px;
+  border-radius: 999px;
+  background: rgba(31, 41, 51, 0.88);
+  color: #fff;
+  box-shadow: 0 14px 32px rgba(17, 24, 39, 0.16);
+  z-index: 130;
+}
+
+.server-fab-icon {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.server-fab-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.server-fab-text {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}

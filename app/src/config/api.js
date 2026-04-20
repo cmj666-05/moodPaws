@@ -1,4 +1,4 @@
-import { reactive } from 'vue'
+import { reactive, readonly } from 'vue'
 import { Capacitor, CapacitorHttp } from '@capacitor/core'
 import { LanDiscovery } from '../plugins/lan-discovery'
 
@@ -6,7 +6,8 @@ const API_SUFFIX = '/api'
 const HEALTH_SUFFIX = '/health'
 const DEFAULT_HEALTH_PATH = '/api/health'
 const DEFAULT_SERVICE_TYPE = '_http._tcp.'
-const STORAGE_KEY = 'moodpaws.api.baseUrl'
+const CACHE_STORAGE_KEY = 'moodpaws.api.baseUrl'
+const MANUAL_STORAGE_KEY = 'moodpaws.api.manualBaseUrl'
 
 const SERVICE_NAME_PREFIX = safeTrim(import.meta.env.VITE_MDNS_SERVICE_NAME || 'moodpaws-server')
 const DISCOVERY_TIMEOUT_MS = Number(import.meta.env.VITE_API_DISCOVERY_TIMEOUT || 3500)
@@ -39,23 +40,30 @@ const defaultVideoConfig = {
 
 const explicitBaseUrl = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL || '')
 const defaultBaseUrl = resolveDefaultBaseUrl()
-const cachedBaseUrl = explicitBaseUrl ? '' : loadStoredBaseUrl()
+const manualBaseUrl = explicitBaseUrl ? '' : loadManualBaseUrl()
+const cachedBaseUrl = explicitBaseUrl || manualBaseUrl ? '' : loadStoredBaseUrl()
 
 const apiState = reactive({
-  baseUrl: explicitBaseUrl || cachedBaseUrl || defaultBaseUrl,
-  source: explicitBaseUrl ? 'env' : cachedBaseUrl ? 'cache' : 'default',
-  discoveryState: explicitBaseUrl ? 'manual' : 'idle',
+  baseUrl: explicitBaseUrl || manualBaseUrl || cachedBaseUrl || defaultBaseUrl,
+  source: explicitBaseUrl ? 'env' : manualBaseUrl ? 'manual' : cachedBaseUrl ? 'cache' : 'default',
+  discoveryState: explicitBaseUrl || manualBaseUrl ? 'manual' : 'idle',
   lastError: '',
   lastResolvedAt: 0,
   lastDiscoveryAt: 0,
   lastDiscoveryReason: '',
   lastServiceName: '',
   lastHealthUrl: '',
+  manualBaseUrl,
+  isManualOverride: Boolean(manualBaseUrl),
+  isEnvOverride: Boolean(explicitBaseUrl),
+  canEditBaseUrl: !explicitBaseUrl,
   video: { ...defaultVideoConfig }
 })
 
 let resolveBaseUrlPromise = null
 let resolveVideoUrlPromise = null
+
+export const apiEndpointState = readonly(apiState)
 
 export const apiConfig = {
   get baseUrl() {
@@ -75,6 +83,10 @@ export function getApiBaseUrl() {
 
 export function getApiState() {
   return { ...apiState }
+}
+
+export function useApiEndpointState() {
+  return apiEndpointState
 }
 
 export function getVideoState() {
@@ -104,7 +116,7 @@ export async function ensureApiBaseUrl(options = {}) {
     reason = 'request'
   } = options
 
-  if (explicitBaseUrl && !forceHealthCheck) {
+  if (hasLockedApiBaseUrl() && !forceHealthCheck) {
     return apiState.baseUrl
   }
 
@@ -119,18 +131,19 @@ export async function ensureApiBaseUrl(options = {}) {
 
     if (shouldProbeCurrentFirst) {
       try {
-        return await validateCandidate({
+        const result = await validateCandidate({
           baseUrl: apiState.baseUrl,
           source: apiState.source || 'current',
           reason
         })
+        return result.baseUrl
       } catch (error) {
         apiState.lastError = toErrorMessage(error)
       }
     }
 
     let services = []
-    if (!explicitBaseUrl && Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('LanDiscovery')) {
+    if (!hasLockedApiBaseUrl() && Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('LanDiscovery')) {
       try {
         services = await discoverNativeServices(reason)
       } catch (error) {
@@ -144,7 +157,8 @@ export async function ensureApiBaseUrl(options = {}) {
 
     for (const candidate of candidates) {
       try {
-        return await validateCandidate(candidate)
+        const result = await validateCandidate(candidate)
+        return result.baseUrl
       } catch (error) {
         lastError = error
       }
@@ -235,7 +249,7 @@ export async function fetchApiJson(path, options = {}) {
   try {
     return await requestJsonAbsolute(`${baseUrl}${requestPath}`, REQUEST_TIMEOUT_MS)
   } catch (error) {
-    if (!retryDiscovery || explicitBaseUrl) {
+    if (!retryDiscovery || hasLockedApiBaseUrl()) {
       throw error
     }
 
@@ -247,6 +261,85 @@ export async function fetchApiJson(path, options = {}) {
 
     return requestJsonAbsolute(`${retryBaseUrl}${requestPath}`, REQUEST_TIMEOUT_MS)
   }
+}
+
+export async function testApiBaseUrl(baseUrl) {
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl)
+  if (!normalizedBaseUrl) {
+    throw new Error('请输入有效的服务器地址')
+  }
+
+  return validateCandidate(
+    {
+      baseUrl: normalizedBaseUrl,
+      source: 'manual',
+      reason: 'manual-check'
+    },
+    {
+      applyResult: false
+    }
+  )
+}
+
+export async function saveManualApiBaseUrl(baseUrl) {
+  if (explicitBaseUrl) {
+    throw new Error('当前构建已通过环境变量固定服务器地址，不能在应用内修改')
+  }
+
+  const result = await testApiBaseUrl(baseUrl)
+  const resolvedBaseUrl = normalizeBaseUrl(result.baseUrl)
+
+  persistManualBaseUrl(resolvedBaseUrl)
+  clearStoredBaseUrl()
+
+  apiState.manualBaseUrl = resolvedBaseUrl
+  apiState.isManualOverride = true
+  apiState.baseUrl = resolvedBaseUrl
+  apiState.source = 'manual'
+  apiState.discoveryState = 'manual'
+  apiState.lastError = ''
+  apiState.lastResolvedAt = Date.now()
+  apiState.lastServiceName = result.health?.discovery?.serviceName || ''
+  apiState.lastHealthUrl = result.healthUrl
+  apiState.video = mergeVideoConfig(
+    apiState.video,
+    resolveVideoConfig(
+      {
+        baseUrl: resolvedBaseUrl,
+        source: 'manual'
+      },
+      result.health
+    )
+  )
+  resolveBaseUrlPromise = null
+
+  return {
+    ...result,
+    baseUrl: resolvedBaseUrl
+  }
+}
+
+export function clearManualApiBaseUrl() {
+  if (explicitBaseUrl) {
+    return getApiState()
+  }
+
+  clearStoredManualBaseUrl()
+  apiState.manualBaseUrl = ''
+  apiState.isManualOverride = false
+  apiState.baseUrl = defaultBaseUrl
+  apiState.source = 'default'
+  apiState.discoveryState = 'idle'
+  apiState.lastError = ''
+  apiState.lastResolvedAt = 0
+  apiState.lastDiscoveryAt = 0
+  apiState.lastDiscoveryReason = ''
+  apiState.lastServiceName = ''
+  apiState.lastHealthUrl = ''
+  apiState.video = { ...defaultVideoConfig }
+  resolveBaseUrlPromise = null
+
+  return getApiState()
 }
 
 function buildCandidates(services = []) {
@@ -418,7 +511,8 @@ async function discoverNativeVideoServices(reason) {
     }))
 }
 
-async function validateCandidate(candidate) {
+async function validateCandidate(candidate, options = {}) {
+  const { applyResult = true } = options
   const baseUrl = normalizeBaseUrl(candidate.baseUrl || '')
   if (!baseUrl) {
     throw new Error('后端地址无效')
@@ -432,8 +526,15 @@ async function validateCandidate(candidate) {
       throw new Error('发现了局域网服务，但它不是 MoodPaws 后端')
     }
 
-    applyResolvedCandidate(candidate, baseUrl, healthUrl, health)
-    return baseUrl
+    if (applyResult) {
+      applyResolvedCandidate(candidate, baseUrl, healthUrl, health)
+    }
+
+    return {
+      baseUrl,
+      healthUrl,
+      health
+    }
   } catch (error) {
     if (candidate.source === 'cache') {
       clearStoredBaseUrl()
@@ -452,7 +553,7 @@ function applyResolvedCandidate(candidate, baseUrl, healthUrl, health) {
   apiState.lastHealthUrl = healthUrl
   apiState.video = mergeVideoConfig(apiState.video, resolveVideoConfig(candidate, health))
 
-  if (!explicitBaseUrl) {
+  if (!hasLockedApiBaseUrl()) {
     persistBaseUrl(baseUrl)
   }
 }
@@ -539,7 +640,7 @@ function persistBaseUrl(baseUrl) {
     return
   }
 
-  window.localStorage.setItem(STORAGE_KEY, baseUrl)
+  window.localStorage.setItem(CACHE_STORAGE_KEY, baseUrl)
 }
 
 function loadStoredBaseUrl() {
@@ -547,7 +648,7 @@ function loadStoredBaseUrl() {
     return ''
   }
 
-  return normalizeBaseUrl(window.localStorage.getItem(STORAGE_KEY) || '')
+  return normalizeBaseUrl(window.localStorage.getItem(CACHE_STORAGE_KEY) || '')
 }
 
 function clearStoredBaseUrl() {
@@ -555,7 +656,35 @@ function clearStoredBaseUrl() {
     return
   }
 
-  window.localStorage.removeItem(STORAGE_KEY)
+  window.localStorage.removeItem(CACHE_STORAGE_KEY)
+}
+
+function persistManualBaseUrl(baseUrl) {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return
+  }
+
+  window.localStorage.setItem(MANUAL_STORAGE_KEY, baseUrl)
+}
+
+function loadManualBaseUrl() {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return ''
+  }
+
+  return normalizeBaseUrl(window.localStorage.getItem(MANUAL_STORAGE_KEY) || '')
+}
+
+function clearStoredManualBaseUrl() {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return
+  }
+
+  window.localStorage.removeItem(MANUAL_STORAGE_KEY)
+}
+
+function hasLockedApiBaseUrl() {
+  return Boolean(explicitBaseUrl || apiState.manualBaseUrl)
 }
 
 function resolveDefaultBaseUrl() {

@@ -96,6 +96,10 @@
 }
 
 .error-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 14px;
   padding: 12px 14px;
   border-radius: 12px;
@@ -103,6 +107,17 @@
   background: rgba(219, 106, 98, 0.08);
   color: #b8534d;
   font-size: 13px;
+}
+
+.error-bar-action {
+  flex-shrink: 0;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(184, 83, 77, 0.12);
+  color: #a84b45;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .section-block {
@@ -283,6 +298,10 @@
   display: block;
   font-size: 28px;
   line-height: 1.1;
+}
+
+.summary-grid > .summary-card:first-child .summary-foot {
+  display: none;
 }
 
 @media (max-width: 520px) {

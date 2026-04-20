@@ -67,10 +67,15 @@ export function parsePayloadObject(payload, topic = '') {
     source: {
       deviceName: inferDeviceName(payload, topic),
       requestId: payload?.requestId ?? payload?.id?.toString?.() ?? '--',
-      createdAt: Number(payload?.gmtCreate) || Number(payload?.id) || null
+      createdAt: Number(payload?.gmtCreate) || Number(payload?.id) || null,
+      deviceType: payload?.deviceType ?? '',
+      iotId: payload?.iotId ?? '',
+      productKey: payload?.productKey ?? ''
     },
+    checkFailedData: payload?.checkFailedData ?? null,
     metricPoints: Object.entries(metrics).map(([metricKey, metric]) => ({
       metricKey,
+      itemKey: metric.itemKey ?? metricKey,
       valueNum: toNumeric(metric.rawValue ?? metric.value),
       valueText: toNumeric(metric.rawValue ?? metric.value) === null ? stringifyValue(metric.value) : null,
       ts: Number(metric.time) || Number(payload?.gmtCreate) || Number(payload?.id) || Date.now()
@@ -97,7 +102,7 @@ function extractMetricsFromItems(items) {
 
   flatKeys.forEach((key) => {
     if (items[key]) {
-      const nextMetric = { ...items[key] }
+      const nextMetric = { ...items[key], itemKey: key }
       if (key === 'PetHouse:Mood') {
         nextMetric.rawValue = items[key].value
         nextMetric.value = getMoodLabel(items[key].value) ?? items[key].value
@@ -108,21 +113,21 @@ function extractMetricsFromItems(items) {
 
   const xyz = items['Collar:XYZ']
   if (xyz?.value) {
-    result.X = { time: xyz.time, value: xyz.value.X }
-    result.Y = { time: xyz.time, value: xyz.value.Y }
-    result.Z = { time: xyz.time, value: xyz.value.Z }
+    result.X = { itemKey: 'Collar:XYZ', time: xyz.time, value: xyz.value.X }
+    result.Y = { itemKey: 'Collar:XYZ', time: xyz.time, value: xyz.value.Y }
+    result.Z = { itemKey: 'Collar:XYZ', time: xyz.time, value: xyz.value.Z }
   }
 
   const gps = items['Collar:GPS']
   if (gps?.value) {
-    result.Longitude = { time: gps.time, value: gps.value.Longitude }
-    result.Latitude = { time: gps.time, value: gps.value.Latitude }
+    result.Longitude = { itemKey: 'Collar:GPS', time: gps.time, value: gps.value.Longitude }
+    result.Latitude = { itemKey: 'Collar:GPS', time: gps.time, value: gps.value.Latitude }
   }
 
   const health = items['Collar:XKXY']
   if (health?.value) {
-    result.HeartRate = { time: health.time, value: health.value.HeartRate }
-    result.SPO2 = { time: health.time, value: health.value.SPO2 }
+    result.HeartRate = { itemKey: 'Collar:XKXY', time: health.time, value: health.value.HeartRate }
+    result.SPO2 = { itemKey: 'Collar:XKXY', time: health.time, value: health.value.SPO2 }
   }
 
   return result

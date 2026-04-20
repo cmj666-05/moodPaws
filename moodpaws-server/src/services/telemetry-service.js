@@ -1,4 +1,3 @@
-import { getLatestEmotionSnapshot } from '../db/repositories/emotion-repo.js'
 import {
   getLatestMessage,
   getLatestMessageByDeviceName,
@@ -130,58 +129,44 @@ export async function getLocationTrack(limit = 1440) {
 }
 
 export async function getLatestEmotion() {
-  const [snapshot, latestHouseMessage, latestMessage] = await Promise.all([
-    getLatestEmotionSnapshot(),
+  const [latestHouseMessage, latestMessage] = await Promise.all([
     getLatestMessageByDeviceName(HOUSE_DEVICE),
     getLatestMessage()
   ])
-  const baseEmotion = createEmotionPayload(snapshot)
-  const moodMetric = extractLatestMoodMetric(latestHouseMessage || latestMessage)
+  const moodMetric =
+    extractLatestMoodMetric(latestHouseMessage) ||
+    extractLatestMoodMetric(latestMessage)
   const telemetryMood = moodMetric
     ? getMoodLabel(moodMetric.valueNum ?? moodMetric.rawValue ?? moodMetric.value)
     : null
 
   if (!telemetryMood) {
-    return baseEmotion
+    return createEmptyEmotionPayload()
   }
 
   return {
-    ...baseEmotion,
-    source: snapshot ? 'telemetry+snapshot' : 'telemetry',
+    ...createEmptyEmotionPayload(),
+    source: 'telemetry',
     currentMood: telemetryMood,
-    createdAt: Number(moodMetric.ts ?? moodMetric.time) || baseEmotion.createdAt
+    createdAt: Number(moodMetric.ts ?? moodMetric.time) || null
   }
 }
 
-function createEmotionPayload(snapshot) {
-  if (!snapshot) {
-    return {
-      source: 'mock',
-      currentMood: '开心',
-      score: 68,
-      voice: {
-        frequency: [],
-        tone: []
-      },
-      fluctuation: {
-        timeline: [],
-        values: []
-      },
-      history: [],
-      createdAt: null
-    }
-  }
-
-  const summary = JSON.parse(snapshot.summary_json || '{}')
-
+function createEmptyEmotionPayload() {
   return {
-    source: snapshot.source,
-    currentMood: snapshot.mood_label,
-    score: snapshot.score,
-    voice: summary.voice || { frequency: [], tone: [] },
-    fluctuation: summary.fluctuation || { timeline: [], values: [] },
-    history: summary.history || [],
-    createdAt: snapshot.created_at
+    source: '',
+    currentMood: '',
+    score: null,
+    voice: {
+      frequency: [],
+      tone: []
+    },
+    fluctuation: {
+      timeline: [],
+      values: []
+    },
+    history: [],
+    createdAt: null
   }
 }
 

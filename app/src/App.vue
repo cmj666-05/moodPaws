@@ -1,11 +1,11 @@
 <script setup>
-import { computed, ref } from 'vue'
-import CollarView from './views/collar/CollarView.vue'
-import DashboardView from './views/dashboard/DashboardView.vue'
-import EmotionView from './views/emotion/EmotionView.vue'
-import SocialView from './views/social/SocialView.vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
+import ApiEndpointSheet from './components/ApiEndpointSheet.vue'
 
 const activeTab = ref('collar')
+const activeViewKey = ref(0)
+const showEndpointSheet = ref(false)
+let preloadTaskId = null
 
 const tabs = [
   { key: 'collar', label: '项圈' },
@@ -14,20 +14,107 @@ const tabs = [
   { key: 'social', label: '社交' }
 ]
 
+const viewLoaders = {
+  collar: () => import('./views/collar/CollarView.vue'),
+  house: () => import('./views/dashboard/DashboardView.vue'),
+  emotion: () => import('./views/emotion/EmotionView.vue'),
+  social: () => import('./views/social/SocialView.vue')
+}
+
 const tabViews = {
-  collar: CollarView,
-  house: DashboardView,
-  emotion: EmotionView,
-  social: SocialView
+  collar: defineAsyncComponent(viewLoaders.collar),
+  house: defineAsyncComponent(viewLoaders.house),
+  emotion: defineAsyncComponent(viewLoaders.emotion),
+  social: defineAsyncComponent(viewLoaders.social)
 }
 
 const activeComponent = computed(() => tabViews[activeTab.value] ?? null)
+const activeViewCacheKey = computed(() => `${activeTab.value}:${activeViewKey.value}`)
+
+function scheduleDeferredTask(callback, timeout = 240) {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  if (typeof window.requestIdleCallback === 'function') {
+    return window.requestIdleCallback(callback, { timeout })
+  }
+
+  return window.setTimeout(callback, timeout)
+}
+
+function clearDeferredTask(taskId) {
+  if (taskId == null || typeof window === 'undefined') {
+    return
+  }
+
+  if (typeof window.cancelIdleCallback === 'function') {
+    window.cancelIdleCallback(taskId)
+    return
+  }
+
+  window.clearTimeout(taskId)
+}
+
+function preloadTabView(tabKey) {
+  const loader = viewLoaders[tabKey]
+  if (!loader) {
+    return
+  }
+
+  loader().catch(() => {
+    // Ignore preload failures and let the normal async component path retry later.
+  })
+}
+
+function preloadInactiveViews() {
+  tabs
+    .filter((tab) => tab.key !== activeTab.value)
+    .forEach((tab, index) => {
+      window.setTimeout(() => {
+        preloadTabView(tab.key)
+      }, index * 120)
+    })
+}
+
+function openEndpointSheet() {
+  showEndpointSheet.value = true
+}
+
+function closeEndpointSheet() {
+  showEndpointSheet.value = false
+}
+
+function handleEndpointSaved() {
+  activeViewKey.value += 1
+  showEndpointSheet.value = false
+}
+
+function handleOpenSheetEvent() {
+  showEndpointSheet.value = true
+}
+
+onMounted(() => {
+  window.addEventListener('moodpaws:open-api-sheet', handleOpenSheetEvent)
+  preloadTaskId = scheduleDeferredTask(() => {
+    preloadTaskId = null
+    preloadInactiveViews()
+  }, 700)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('moodpaws:open-api-sheet', handleOpenSheetEvent)
+  clearDeferredTask(preloadTaskId)
+  preloadTaskId = null
+})
 </script>
 
 <template>
   <div class="app-shell">
     <main class="app-content">
-      <component :is="activeComponent" v-if="activeComponent" />
+      <KeepAlive :max="tabs.length">
+        <component :is="activeComponent" :key="activeViewCacheKey" v-if="activeComponent" />
+      </KeepAlive>
 
       <section v-if="!activeComponent" class="placeholder-page">
         <div class="placeholder-card">
@@ -44,6 +131,9 @@ const activeComponent = computed(() => tabViews[activeTab.value] ?? null)
         :key="tab.key"
         class="tab-btn"
         :class="{ active: activeTab === tab.key }"
+        @pointerenter="preloadTabView(tab.key)"
+        @focus="preloadTabView(tab.key)"
+        @touchstart.passive="preloadTabView(tab.key)"
         @click="activeTab = tab.key"
       >
         <span class="tab-icon-wrap">
@@ -78,6 +168,24 @@ const activeComponent = computed(() => tabViews[activeTab.value] ?? null)
         <span class="tab-text">{{ tab.label }}</span>
       </button>
     </nav>
+
+    <button type="button" class="server-fab" aria-label="服务器设置" @click="openEndpointSheet">
+      <span class="server-fab-icon">
+        <svg viewBox="0 0 24 24" fill="none">
+          <rect x="4" y="5" width="16" height="5" rx="1.8" stroke="currentColor" stroke-width="1.7" />
+          <rect x="4" y="14" width="16" height="5" rx="1.8" stroke="currentColor" stroke-width="1.7" />
+          <circle cx="8" cy="7.5" r="0.9" fill="currentColor" />
+          <circle cx="8" cy="16.5" r="0.9" fill="currentColor" />
+        </svg>
+      </span>
+      <span class="server-fab-text">服务器</span>
+    </button>
+
+    <ApiEndpointSheet
+      :open="showEndpointSheet"
+      @close="closeEndpointSheet"
+      @saved="handleEndpointSaved"
+    />
   </div>
 </template>
 

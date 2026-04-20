@@ -5,6 +5,19 @@ const loading = ref(false)
 const telemetryLoading = ref(false)
 const emotionLoading = ref(false)
 const errorMessage = ref('')
+
+function createEmptyEmotionState() {
+  return {
+    source: '',
+    currentMood: '',
+    score: null,
+    voice: { frequency: [], tone: [] },
+    fluctuation: { timeline: [], values: [] },
+    history: [],
+    createdAt: null
+  }
+}
+
 const latestTelemetry = ref({
   source: { deviceName: '--', requestId: '--', createdAt: null },
   sections: [],
@@ -17,15 +30,7 @@ const latestTelemetry = ref({
 })
 const heartRateHistory = ref([])
 const locationTrack = ref([])
-const emotion = ref({
-  source: 'mock',
-  currentMood: '开心',
-  score: 68,
-  voice: { frequency: [], tone: [] },
-  fluctuation: { timeline: [], values: [] },
-  history: [],
-  createdAt: null
-})
+const emotion = ref(createEmptyEmotionState())
 
 let telemetryPollTimer = null
 let emotionPollTimer = null
@@ -33,7 +38,11 @@ let telemetryRefreshPromise = null
 let emotionRefreshPromise = null
 let lastTelemetryRefreshAt = 0
 let lastEmotionRefreshAt = 0
+let lastTelemetryDetailsRefreshAt = 0
 const REFRESH_DEDUP_MS = 3000
+const DETAILS_REFRESH_INTERVAL_MS = Number(
+  import.meta.env.VITE_API_DETAILS_POLL_INTERVAL || Math.max(apiConfig.pollInterval * 6, 30000)
+)
 
 export function usePetApi() {
   const sourceSummary = computed(() => [
@@ -106,19 +115,30 @@ export function usePetApi() {
     const data = await fetchJson('/emotion/latest')
     if (data && typeof data === 'object') {
       emotion.value = {
-        source: data.source || emotion.value.source,
-        currentMood: data.currentMood || emotion.value.currentMood,
-        score: data.score ?? emotion.value.score,
-        voice: data.voice || emotion.value.voice,
-        fluctuation: data.fluctuation || emotion.value.fluctuation,
-        history: data.history || emotion.value.history,
-        createdAt: data.createdAt || emotion.value.createdAt
+        source: typeof data.source === 'string' ? data.source : '',
+        currentMood: typeof data.currentMood === 'string' ? data.currentMood : '',
+        score: Number.isFinite(Number(data.score)) ? Number(data.score) : null,
+        voice: {
+          frequency: Array.isArray(data.voice?.frequency) ? data.voice.frequency : [],
+          tone: Array.isArray(data.voice?.tone) ? data.voice.tone : []
+        },
+        fluctuation: {
+          timeline: Array.isArray(data.fluctuation?.timeline) ? data.fluctuation.timeline : [],
+          values: Array.isArray(data.fluctuation?.values) ? data.fluctuation.values : []
+        },
+        history: Array.isArray(data.history) ? data.history : [],
+        createdAt: Number.isFinite(Number(data.createdAt)) ? Number(data.createdAt) : null
       }
+      return
     }
+
+    emotion.value = createEmptyEmotionState()
   }
 
   async function refreshTelemetryBundle(options = {}) {
     const force = options.force === true
+    const includeHistory = options.includeHistory !== false
+    const includeTrack = options.includeTrack !== false
     const now = Date.now()
 
     if (!force && telemetryRefreshPromise) {
@@ -131,14 +151,24 @@ export function usePetApi() {
 
     telemetryLoading.value = true
     syncLoadingState()
-    telemetryRefreshPromise = Promise.all([
-      refreshTelemetry(),
-      refreshHeartRateHistory(),
-      refreshLocationTrack()
-    ])
+
+    const tasks = [refreshTelemetry()]
+
+    if (includeHistory) {
+      tasks.push(refreshHeartRateHistory())
+    }
+
+    if (includeTrack) {
+      tasks.push(refreshLocationTrack())
+    }
+
+    telemetryRefreshPromise = Promise.all(tasks)
       .then(() => {
         errorMessage.value = ''
         lastTelemetryRefreshAt = Date.now()
+        if (includeHistory || includeTrack) {
+          lastTelemetryDetailsRefreshAt = lastTelemetryRefreshAt
+        }
       })
       .catch((error) => {
         errorMessage.value = error instanceof Error ? error.message : '加载失败'
@@ -150,6 +180,27 @@ export function usePetApi() {
       })
 
     return telemetryRefreshPromise
+  }
+
+  async function refreshTelemetryDetails(options = {}) {
+    const includeHistory = options.includeHistory !== false
+    const includeTrack = options.includeTrack !== false
+    const tasks = []
+
+    if (includeHistory) {
+      tasks.push(refreshHeartRateHistory())
+    }
+
+    if (includeTrack) {
+      tasks.push(refreshLocationTrack())
+    }
+
+    if (!tasks.length) {
+      return
+    }
+
+    await Promise.all(tasks)
+    lastTelemetryDetailsRefreshAt = Date.now()
   }
 
   async function refreshEmotionBundle(options = {}) {
@@ -204,6 +255,7 @@ export function usePetApi() {
     heartRateHistory.value = []
     locationTrack.value = []
     errorMessage.value = ''
+    lastTelemetryDetailsRefreshAt = 0
   }
 
   function startTelemetryPolling() {
@@ -212,7 +264,14 @@ export function usePetApi() {
     }
 
     telemetryPollTimer = window.setInterval(() => {
-      refreshTelemetryBundle({ force: true })
+      const shouldRefreshDetails =
+        Date.now() - lastTelemetryDetailsRefreshAt >= DETAILS_REFRESH_INTERVAL_MS
+
+      refreshTelemetryBundle({
+        force: true,
+        includeHistory: shouldRefreshDetails,
+        includeTrack: shouldRefreshDetails
+      })
     }, apiConfig.pollInterval)
   }
 
@@ -270,6 +329,7 @@ export function usePetApi() {
     refreshTelemetry,
     refreshHeartRateHistory,
     refreshLocationTrack,
+    refreshTelemetryDetails,
     refreshEmotion,
     refreshTelemetryBundle,
     refreshEmotionBundle,

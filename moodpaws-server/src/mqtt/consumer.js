@@ -10,6 +10,10 @@ export async function consumeMessage(topic, payload) {
     deviceName: parsed.source.deviceName,
     requestId: parsed.source.requestId,
     gmtCreate: parsed.source.createdAt,
+    deviceType: parsed.source.deviceType,
+    iotId: parsed.source.iotId,
+    productKey: parsed.source.productKey,
+    checkFailedDataJson: parsed.checkFailedData ? JSON.stringify(parsed.checkFailedData) : null,
     payloadJson: payloadText,
     receivedAt
   })

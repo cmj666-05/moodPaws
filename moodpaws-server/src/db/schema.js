@@ -1,6 +1,5 @@
 import { env } from '../config/env.js'
-import { buildDemoState } from './memory-store.js'
-import { exec, get, run } from './sqlite.js'
+import { all, exec, get, run } from './sqlite.js'
 
 export async function initSchema() {
   if (env.dataMode !== 'sqlite') {
@@ -14,6 +13,10 @@ export async function initSchema() {
       device_name TEXT NOT NULL,
       request_id TEXT,
       gmt_create INTEGER,
+      device_type TEXT,
+      iot_id TEXT,
+      product_key TEXT,
+      check_failed_data_json TEXT,
       payload_json TEXT NOT NULL,
       received_at INTEGER NOT NULL
     );
@@ -22,50 +25,97 @@ export async function initSchema() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       message_id INTEGER NOT NULL,
       metric_key TEXT NOT NULL,
+      item_key TEXT,
       value_num REAL,
       value_text TEXT,
       ts INTEGER NOT NULL,
       FOREIGN KEY (message_id) REFERENCES mqtt_messages(id) ON DELETE CASCADE
     );
-
-    CREATE TABLE IF NOT EXISTS emotion_snapshots (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      source TEXT NOT NULL,
-      mood_label TEXT NOT NULL,
-      score INTEGER NOT NULL,
-      summary_json TEXT NOT NULL,
-      created_at INTEGER NOT NULL
-    );
   `)
 
-  const row = await get('SELECT COUNT(*) AS count FROM mqtt_messages')
-  if ((row?.count ?? 0) > 0) {
+  await ensureColumn('mqtt_messages', 'device_type TEXT')
+  await ensureColumn('mqtt_messages', 'iot_id TEXT')
+  await ensureColumn('mqtt_messages', 'product_key TEXT')
+  await ensureColumn('mqtt_messages', 'check_failed_data_json TEXT')
+  await ensureColumn('metric_points', 'item_key TEXT')
+
+  await backfillMessageColumns()
+  await backfillMetricItemKeys()
+  await removeSeededDemoRows()
+  await clearMockEmotionSnapshots()
+}
+
+async function ensureColumn(tableName, columnDefinition) {
+  const [columnName] = columnDefinition.split(' ')
+  const columns = await all(`PRAGMA table_info(${tableName})`)
+  if (columns.some((column) => column.name === columnName)) {
     return
   }
 
-  const demo = buildDemoState()
+  exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnDefinition}`)
+}
 
-  for (const message of demo.mqttMessages) {
+async function backfillMessageColumns() {
+  const rows = await all(`
+    SELECT id, payload_json, device_type, iot_id, product_key, check_failed_data_json
+    FROM mqtt_messages
+    WHERE device_type IS NULL
+       OR iot_id IS NULL
+       OR product_key IS NULL
+       OR check_failed_data_json IS NULL
+  `)
+
+  for (const row of rows) {
+    let payload = null
+    try {
+      payload = JSON.parse(row.payload_json)
+    } catch {
+      payload = null
+    }
+
     await run(
-      `INSERT INTO mqtt_messages (topic, device_name, request_id, gmt_create, payload_json, received_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [message.topic, message.device_name, message.request_id, message.gmt_create, message.payload_json, message.received_at]
+      `UPDATE mqtt_messages
+       SET device_type = ?,
+           iot_id = ?,
+           product_key = ?,
+           check_failed_data_json = ?
+       WHERE id = ?`,
+      [
+        payload?.deviceType ?? null,
+        payload?.iotId ?? null,
+        payload?.productKey ?? null,
+        payload?.checkFailedData ? JSON.stringify(payload.checkFailedData) : null,
+        row.id
+      ]
     )
   }
+}
 
-  for (const point of demo.metricPoints) {
-    await run(
-      `INSERT INTO metric_points (message_id, metric_key, value_num, value_text, ts)
-       VALUES (?, ?, ?, ?, ?)`,
-      [point.message_id, point.metric_key, point.value_num, point.value_text, point.ts]
-    )
+async function backfillMetricItemKeys() {
+  await run(`UPDATE metric_points SET item_key = 'Collar:XYZ' WHERE item_key IS NULL AND metric_key IN ('X', 'Y', 'Z')`)
+  await run(`UPDATE metric_points SET item_key = 'Collar:GPS' WHERE item_key IS NULL AND metric_key IN ('Longitude', 'Latitude')`)
+  await run(`UPDATE metric_points SET item_key = 'Collar:XKXY' WHERE item_key IS NULL AND metric_key IN ('HeartRate', 'SPO2')`)
+  await run(`UPDATE metric_points SET item_key = metric_key WHERE item_key IS NULL`)
+}
+
+async function removeSeededDemoRows() {
+  await run(`
+    DELETE FROM mqtt_messages
+    WHERE request_id LIKE 'collar-%'
+       OR request_id LIKE 'doghouse-%'
+  `)
+}
+
+async function clearMockEmotionSnapshots() {
+  const table = await get(`
+    SELECT name
+    FROM sqlite_master
+    WHERE type = 'table' AND name = 'emotion_snapshots'
+  `)
+
+  if (!table) {
+    return
   }
 
-  for (const snapshot of demo.emotionSnapshots) {
-    await run(
-      `INSERT INTO emotion_snapshots (source, mood_label, score, summary_json, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
-      [snapshot.source, snapshot.mood_label, snapshot.score, snapshot.summary_json, snapshot.created_at]
-    )
-  }
+  await run(`DELETE FROM emotion_snapshots WHERE source = 'mock'`)
 }

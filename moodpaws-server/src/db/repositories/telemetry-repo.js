@@ -2,7 +2,18 @@ import { env } from '../../config/env.js'
 import { getMemoryState } from '../memory-store.js'
 import { all, get, run } from '../sqlite.js'
 
-export async function insertMessage({ topic, deviceName, requestId, gmtCreate, payloadJson, receivedAt }) {
+export async function insertMessage({
+  topic,
+  deviceName,
+  requestId,
+  gmtCreate,
+  deviceType,
+  iotId,
+  productKey,
+  checkFailedDataJson,
+  payloadJson,
+  receivedAt
+}) {
   if (env.dataMode !== 'sqlite') {
     const state = getMemoryState()
     const nextId = (state.mqttMessages.at(-1)?.id ?? 0) + 1
@@ -12,6 +23,10 @@ export async function insertMessage({ topic, deviceName, requestId, gmtCreate, p
       device_name: deviceName,
       request_id: requestId,
       gmt_create: gmtCreate,
+      device_type: deviceType || null,
+      iot_id: iotId || null,
+      product_key: productKey || null,
+      check_failed_data_json: checkFailedDataJson,
       payload_json: payloadJson,
       received_at: receivedAt
     })
@@ -19,9 +34,30 @@ export async function insertMessage({ topic, deviceName, requestId, gmtCreate, p
   }
 
   const result = await run(
-    `INSERT INTO mqtt_messages (topic, device_name, request_id, gmt_create, payload_json, received_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [topic, deviceName, requestId, gmtCreate, payloadJson, receivedAt]
+    `INSERT INTO mqtt_messages (
+      topic,
+      device_name,
+      request_id,
+      gmt_create,
+      device_type,
+      iot_id,
+      product_key,
+      check_failed_data_json,
+      payload_json,
+      received_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      topic,
+      deviceName,
+      requestId,
+      gmtCreate,
+      deviceType || null,
+      iotId || null,
+      productKey || null,
+      checkFailedDataJson,
+      payloadJson,
+      receivedAt
+    ]
   )
 
   return result.lastID
@@ -37,6 +73,7 @@ export async function insertMetricPoints(messageId, metricPoints) {
         id: nextId,
         message_id: messageId,
         metric_key: point.metricKey,
+        item_key: point.itemKey ?? null,
         value_num: point.valueNum,
         value_text: point.valueText,
         ts: point.ts
@@ -48,9 +85,9 @@ export async function insertMetricPoints(messageId, metricPoints) {
 
   for (const point of metricPoints) {
     await run(
-      `INSERT INTO metric_points (message_id, metric_key, value_num, value_text, ts)
-       VALUES (?, ?, ?, ?, ?)`,
-      [messageId, point.metricKey, point.valueNum, point.valueText, point.ts]
+      `INSERT INTO metric_points (message_id, metric_key, item_key, value_num, value_text, ts)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [messageId, point.metricKey, point.itemKey ?? null, point.valueNum, point.valueText, point.ts]
     )
   }
 }

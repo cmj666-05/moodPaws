@@ -1,7 +1,6 @@
 import { createApp } from './app.js'
 import { env } from './config/env.js'
 import { initSchema } from './db/schema.js'
-import { seedDefaultEmotionSnapshot } from './db/repositories/emotion-repo.js'
 import { createMqttSubscriber } from './mqtt/client.js'
 import { consumeMessage } from './mqtt/consumer.js'
 import { createServiceDiscovery } from './discovery/service-discovery.js'
@@ -80,7 +79,6 @@ function logAccessibleAddresses(addresses) {
 
 async function bootstrap() {
   await initSchema()
-  await seedDefaultEmotionSnapshot()
 
   const app = createApp({ mqttState, serviceState })
   const discovery = createServiceDiscovery({

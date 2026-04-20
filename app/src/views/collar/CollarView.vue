@@ -1,13 +1,42 @@
 <script setup>
 import { Capacitor } from '@capacitor/core'
-import * as echarts from 'echarts/core'
-import { LineChart } from 'echarts/charts'
-import { GridComponent } from 'echarts/components'
-import { CanvasRenderer } from 'echarts/renderers'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { amapConfig } from '../../config/amap'
 import { usePetApi } from '../../composables/usePetApi'
 import { loadAmap } from '../../services/amap/loader'
+
+let echartsRuntimePromise = null
+
+async function loadEchartsRuntime() {
+  if (echartsRuntimePromise) {
+    return echartsRuntimePromise
+  }
+
+  echartsRuntimePromise = Promise.all([
+    import('echarts/core'),
+    import('echarts/charts'),
+    import('echarts/components'),
+    import('echarts/renderers')
+  ])
+    .then(([echartsCore, echartsCharts, echartsComponents, echartsRenderers]) => {
+      echartsCore.use([
+        echartsCharts.LineChart,
+        echartsComponents.GridComponent,
+        echartsRenderers.CanvasRenderer
+      ])
+
+      return {
+        graphic: echartsCore.graphic,
+        init: echartsCore.init
+      }
+    })
+    .catch((error) => {
+      echartsRuntimePromise = null
+      throw error
+    })
+
+  return echartsRuntimePromise
+}
 
 const isValidCoordinatePair = (lng, lat) =>
   Number.isFinite(lng) &&
@@ -29,10 +58,6 @@ const formatHistoryPoints = (points) =>
     t: formatMetricTime(item.time)
   }))
 
-const getLastHeartRate = (points) => points.at(-1)?.v ?? '--'
-
-echarts.use([LineChart, GridComponent, CanvasRenderer])
-
 const {
   loading,
   errorMessage,
@@ -43,6 +68,7 @@ const {
   homeMetrics,
   refreshAll,
   refreshTelemetryBundle,
+  refreshTelemetryDetails,
   refreshEmotionBundle,
   startTelemetryPolling,
   startEmotionPolling,
@@ -51,31 +77,39 @@ const {
 } = usePetApi()
 
 const mapContainer = ref(null)
+const mapSectionEl = ref(null)
 const mapError = ref('')
+const isMapSectionVisible = ref(false)
+const hrChartEl = ref(null)
+const hrHistory = ref([])
+
+const HR_MAX_POINTS = 30
 
 let map = null
 let marker = null
 let polyline = null
+let mapSetupPromise = null
+let mapVisibilityObserver = null
+let hrChart = null
+let hrChartInitPromise = null
+let hrChartGraphic = null
+let deferredTelemetryDetailsTask = null
 
 const heartRate = computed(() => homeMetrics.value.heartRate)
 const spo2 = computed(() => homeMetrics.value.spo2)
 const weight = computed(() => homeMetrics.value.weight)
-const motionX = computed(() => homeMetrics.value.motionX)
-const motionY = computed(() => homeMetrics.value.motionY)
-const motionZ = computed(() => homeMetrics.value.motionZ)
 const longitude = computed(() => homeMetrics.value.longitude)
 const latitude = computed(() => homeMetrics.value.latitude)
 
 const petMood = computed(() => emotion.value.currentMood || '开心')
 const stepCount = computed(() => Number(latestTelemetry.value?.stepCount) || 0)
-const latestTelemetryAt = computed(() => Number(latestTelemetry.value?.lastActiveAt || latestTelemetry.value?.receivedAt) || 0)
-const hrChartEl = ref(null)
-const HR_MAX_POINTS = 30
-const hrHistory = ref([])
+const latestTelemetryAt = computed(() =>
+  Number(latestTelemetry.value?.lastActiveAt || latestTelemetry.value?.receivedAt) || 0
+)
 
-let hrChart = null
-
-const isOnline = computed(() => Boolean(latestTelemetry.value?.isOnline && latestTelemetry.value.sections?.length > 0))
+const isOnline = computed(() =>
+  Boolean(latestTelemetry.value?.isOnline && latestTelemetry.value.sections?.length > 0)
+)
 const isConnecting = computed(() => loading.value && !latestTelemetryAt.value)
 const isWeb = !Capacitor.isNativePlatform()
 
@@ -87,7 +121,32 @@ const hasCoordinates = computed(() => {
 
 const locationStatusText = computed(() => (hasCoordinates.value ? '定位正常' : '等待定位'))
 
-function buildHrOption(data) {
+function scheduleDeferredTask(callback, timeout = 240) {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  if (typeof window.requestIdleCallback === 'function') {
+    return window.requestIdleCallback(callback, { timeout })
+  }
+
+  return window.setTimeout(callback, timeout)
+}
+
+function clearDeferredTask(taskId) {
+  if (taskId == null || typeof window === 'undefined') {
+    return
+  }
+
+  if (typeof window.cancelIdleCallback === 'function') {
+    window.cancelIdleCallback(taskId)
+    return
+  }
+
+  window.clearTimeout(taskId)
+}
+
+function buildHrOption(data, graphic) {
   const values = data.map((item) => item.v)
   return {
     animation: false,
@@ -112,7 +171,7 @@ function buildHrOption(data) {
         symbol: 'none',
         lineStyle: { color: '#d56a6a', width: 2.2 },
         areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          color: new graphic.LinearGradient(0, 0, 0, 1, [
             { offset: 0, color: 'rgba(213,106,106,0.18)' },
             { offset: 1, color: 'rgba(213,106,106,0.02)' }
           ])
@@ -122,14 +181,33 @@ function buildHrOption(data) {
   }
 }
 
-function initHrChart() {
-  if (!hrChartEl.value || hrChart) return
-  hrChart = echarts.init(hrChartEl.value)
-  hrChart.setOption(buildHrOption(hrHistory.value))
+async function initHrChart() {
+  if (!hrChartEl.value || hrChart || hrChartInitPromise || !hrHistory.value.length) return
+
+  hrChartInitPromise = loadEchartsRuntime()
+    .then((runtime) => {
+      if (!hrChartEl.value || hrChart) return
+
+      hrChartGraphic = runtime.graphic
+      hrChart = runtime.init(hrChartEl.value)
+      hrChart.setOption(buildHrOption(hrHistory.value, hrChartGraphic))
+    })
+    .catch(() => {
+      hrChartGraphic = null
+    })
+    .finally(() => {
+      hrChartInitPromise = null
+    })
+
+  return hrChartInitPromise
 }
 
 function handleStatusTap() {
-  refreshAll()
+  refreshAll({ force: true })
+}
+
+function openServerSettings() {
+  window.dispatchEvent(new Event('moodpaws:open-api-sheet'))
 }
 
 function getCurrentPosition() {
@@ -165,47 +243,120 @@ function updateTrack() {
 }
 
 async function setupMap() {
-  if (map || !mapContainer.value) return
-
-  try {
-    const AMap = await loadAmap()
-    map = new AMap.Map(mapContainer.value, {
-      zoom: amapConfig.defaultZoom,
-      center: amapConfig.defaultCenter,
-      viewMode: '2D',
-      resizeEnable: true
-    })
-
-    marker = new AMap.Marker({
-      position: amapConfig.defaultCenter,
-      offset: new AMap.Pixel(-13, -30),
-      title: 'Collar GPS'
-    })
-
-    polyline = new AMap.Polyline({
-      strokeColor: '#4f7b99',
-      strokeWeight: 4,
-      strokeOpacity: 0.88,
-      lineJoin: 'round',
-      lineCap: 'round'
-    })
-
-    map.add(marker)
-    map.add(polyline)
-    updateTrack()
-    mapError.value = ''
-  } catch (error) {
-    mapError.value = error instanceof Error ? error.message : '地图加载失败'
+  if (
+    map ||
+    mapSetupPromise ||
+    !mapContainer.value ||
+    !isMapSectionVisible.value ||
+    !hasCoordinates.value
+  ) {
+    return mapSetupPromise
   }
+
+  mapSetupPromise = (async () => {
+    try {
+      const AMap = await loadAmap()
+      if (!mapContainer.value || map) return
+
+      map = new AMap.Map(mapContainer.value, {
+        zoom: amapConfig.defaultZoom,
+        center: amapConfig.defaultCenter,
+        viewMode: '2D',
+        resizeEnable: true
+      })
+
+      marker = new AMap.Marker({
+        position: amapConfig.defaultCenter,
+        offset: new AMap.Pixel(-13, -30),
+        title: 'Collar GPS'
+      })
+
+      polyline = new AMap.Polyline({
+        strokeColor: '#4f7b99',
+        strokeWeight: 4,
+        strokeOpacity: 0.88,
+        lineJoin: 'round',
+        lineCap: 'round'
+      })
+
+      map.add(marker)
+      map.add(polyline)
+      updateTrack()
+      mapError.value = ''
+    } catch (error) {
+      mapError.value = error instanceof Error ? error.message : '地图加载失败'
+    }
+  })()
+    .finally(() => {
+      mapSetupPromise = null
+    })
+
+  return mapSetupPromise
+}
+
+function observeMapSection() {
+  if (!mapSectionEl.value || typeof window === 'undefined') {
+    isMapSectionVisible.value = true
+    return
+  }
+
+  if (typeof window.IntersectionObserver !== 'function') {
+    isMapSectionVisible.value = true
+    return
+  }
+
+  mapVisibilityObserver = new window.IntersectionObserver(
+    (entries) => {
+      const visible = entries.some((entry) => entry.isIntersecting || entry.intersectionRatio > 0)
+
+      if (!visible) {
+        return
+      }
+
+      isMapSectionVisible.value = true
+      mapVisibilityObserver?.disconnect()
+      mapVisibilityObserver = null
+    },
+    {
+      rootMargin: '180px 0px'
+    }
+  )
+
+  mapVisibilityObserver.observe(mapSectionEl.value)
+}
+
+function scheduleTelemetryDetailsHydration() {
+  clearDeferredTask(deferredTelemetryDetailsTask)
+  deferredTelemetryDetailsTask = scheduleDeferredTask(async () => {
+    deferredTelemetryDetailsTask = null
+
+    try {
+      await refreshTelemetryDetails()
+    } catch {
+      // Non-critical history and track hydration should not block the first screen.
+    }
+  }, 600)
 }
 
 watch(
   heartRateHistory,
   (points) => {
-    const normalized = formatHistoryPoints(points).filter((item) => Number.isFinite(item.v)).slice(-HR_MAX_POINTS)
+    const normalized = formatHistoryPoints(points)
+      .filter((item) => Number.isFinite(item.v))
+      .slice(-HR_MAX_POINTS)
+
     hrHistory.value = normalized
-    if (hrChart) hrChart.setOption(buildHrOption(hrHistory.value))
-    else nextTick(initHrChart)
+
+    if (hrChart && hrChartGraphic) {
+      hrChart.setOption(buildHrOption(hrHistory.value, hrChartGraphic))
+      return
+    }
+
+    if (hrHistory.value.length) {
+      nextTick(() => {
+        initHrChart()
+      })
+    }
   },
   { immediate: true, deep: true }
 )
@@ -214,20 +365,33 @@ watch([longitude, latitude, locationTrack], () => {
   updateTrack()
 }, { deep: true })
 
+watch([hasCoordinates, isMapSectionVisible], ([coordinatesReady, sectionVisible]) => {
+  if (coordinatesReady && sectionVisible) {
+    setupMap()
+  }
+})
+
 onMounted(async () => {
-  await Promise.all([refreshTelemetryBundle(), refreshEmotionBundle()])
+  await Promise.all([
+    refreshTelemetryBundle({ includeHistory: false, includeTrack: false }),
+    refreshEmotionBundle()
+  ])
   startTelemetryPolling()
   startEmotionPolling()
   await nextTick()
-  initHrChart()
-  await setupMap()
+  observeMapSection()
+  scheduleTelemetryDetailsHydration()
 })
 
 onBeforeUnmount(() => {
   stopTelemetryPolling()
   stopEmotionPolling()
+  clearDeferredTask(deferredTelemetryDetailsTask)
+  mapVisibilityObserver?.disconnect()
+  mapVisibilityObserver = null
   hrChart?.dispose()
   hrChart = null
+  hrChartGraphic = null
   if (map) {
     map.destroy()
     map = null
@@ -276,11 +440,14 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <p v-if="errorMessage" class="error-bar">{{ errorMessage }}</p>
+    <div v-if="errorMessage" class="error-bar">
+      <span>{{ errorMessage }}</span>
+      <button type="button" class="error-bar-action" @click="openServerSettings">服务器设置</button>
+    </div>
 
     <section class="section-block health-section">
       <div class="section-heading">
-        <h2>健康检测</h2>
+        <h2>健康监测</h2>
       </div>
 
       <div class="health-grid">
@@ -335,7 +502,7 @@ onBeforeUnmount(() => {
         <h2>位置轨迹</h2>
       </div>
 
-      <article class="map-card">
+      <article ref="mapSectionEl" class="map-card">
         <div ref="mapContainer" class="map-panel" :class="{ empty: !hasCoordinates || !!mapError }">
           <div v-if="!hasCoordinates" class="map-overlay">
             <p>等待 GPS 坐标</p>

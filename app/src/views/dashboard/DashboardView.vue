@@ -48,6 +48,7 @@ const {
 const hasVideoError = ref(false)
 const isVideoConnecting = ref(false)
 const reconnectAttempt = ref(0)
+let deferredVideoDiscoveryTask = null
 
 const allMetrics = computed(() =>
   metricSections.value.flatMap((section) => section.metrics || [])
@@ -63,6 +64,31 @@ const humidityMetric = getMetric(['PetHouse:Humi'])
 const co2Metric = getMetric(['PetHouse:CO2'])
 const airQualityMetric = getMetric(['PetHouse:VOC', 'PetHouse:MQ135'])
 const resolvedVideoStreamUrl = computed(() => getVideoStreamUrl())
+
+function scheduleDeferredTask(callback, timeout = 240) {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  if (typeof window.requestIdleCallback === 'function') {
+    return window.requestIdleCallback(callback, { timeout })
+  }
+
+  return window.setTimeout(callback, timeout)
+}
+
+function clearDeferredTask(taskId) {
+  if (taskId == null || typeof window === 'undefined') {
+    return
+  }
+
+  if (typeof window.cancelIdleCallback === 'function') {
+    window.cancelIdleCallback(taskId)
+    return
+  }
+
+  window.clearTimeout(taskId)
+}
 
 function formatMetricDisplay(metric, fallback) {
   const value = metric?.value
@@ -158,6 +184,19 @@ async function reconnectStream() {
   reconnectAttempt.value += 1
 }
 
+function scheduleVideoDiscovery() {
+  clearDeferredTask(deferredVideoDiscoveryTask)
+  deferredVideoDiscoveryTask = scheduleDeferredTask(async () => {
+    deferredVideoDiscoveryTask = null
+
+    try {
+      await ensureVideoStreamUrl({ reason: 'dashboard_mount' })
+    } catch {
+      // Video discovery should not block the first paint of the dashboard.
+    }
+  }, 500)
+}
+
 watch(
   resolvedVideoStreamUrl,
   (url, previousUrl) => {
@@ -178,15 +217,19 @@ watch(
 )
 
 onMounted(async () => {
-  await Promise.all([refreshTelemetryBundle(), refreshEmotionBundle()])
-  await ensureVideoStreamUrl({ reason: 'dashboard_mount' })
+  await Promise.all([
+    refreshTelemetryBundle({ includeHistory: false, includeTrack: false }),
+    refreshEmotionBundle()
+  ])
   startTelemetryPolling()
   startEmotionPolling()
+  scheduleVideoDiscovery()
 })
 
 onBeforeUnmount(() => {
   stopTelemetryPolling()
   stopEmotionPolling()
+  clearDeferredTask(deferredVideoDiscoveryTask)
 })
 </script>
 

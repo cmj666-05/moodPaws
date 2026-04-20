@@ -1,430 +1,180 @@
 <script setup>
-import * as echarts from 'echarts/core'
-import { BarChart, GaugeChart, LineChart } from 'echarts/charts'
-import { GraphicComponent, GridComponent } from 'echarts/components'
-import { CanvasRenderer } from 'echarts/renderers'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { usePetApi } from '../../composables/usePetApi'
 
-echarts.use([GaugeChart, BarChart, LineChart, GridComponent, GraphicComponent, CanvasRenderer])
-
-const carouselRef = ref(null)
-const activeSlide = ref(0)
-const gaugeChartEl = ref(null)
-const voiceChartEl = ref(null)
-const fluctuationChartEl = ref(null)
-
 const {
-  errorMessage,
   emotion,
   refreshEmotionBundle,
   startEmotionPolling,
   stopEmotionPolling
 } = usePetApi()
 
-const currentMood = computed(() => emotion.value.currentMood || '开心')
-const emotionScore = computed(() => Number(emotion.value.score) || 0)
-const voiceFrequency = computed(() => emotion.value.voice?.frequency || [])
-const voiceTone = computed(() => emotion.value.voice?.tone || [])
-const fluctuationTimeline = computed(() => emotion.value.fluctuation?.timeline || [])
-const fluctuationMetrics = computed(() => emotion.value.fluctuation?.values || [])
-const moodHistory = computed(() => emotion.value.history || [])
-
-const analysisSlides = [
-  { key: 'voice', title: '声音分析', subtitle: '频率与音调趋势' },
-  { key: 'posture', title: '姿态识别', subtitle: '查看全天情绪波动趋势' }
+const emotionCatalog = [
+  {
+    key: 'angry',
+    label: '生气',
+    mark: '生',
+    brief: '高警觉',
+    summary: '它可能被刺激到了，先减少打扰、降低噪声，会比强行互动更合适。',
+    accent: '#d96b5f',
+    soft: 'rgba(217, 107, 95, 0.14)',
+    glow: 'rgba(217, 107, 95, 0.22)'
+  },
+  {
+    key: 'anxious',
+    label: '焦虑',
+    mark: '焦',
+    brief: '需要稳定感',
+    summary: '这会更像对环境变化的敏感反应，熟悉的陪伴和稳定节奏能让它更快放松。',
+    accent: '#e0a24f',
+    soft: 'rgba(224, 162, 79, 0.16)',
+    glow: 'rgba(224, 162, 79, 0.2)'
+  },
+  {
+    key: 'happy',
+    label: '开心',
+    mark: '开',
+    brief: '状态轻松',
+    summary: '整体情绪比较积极，现在适合互动、奖励，或者安排一点轻松活动。',
+    accent: '#58b57d',
+    soft: 'rgba(88, 181, 125, 0.16)',
+    glow: 'rgba(88, 181, 125, 0.2)'
+  },
+  {
+    key: 'lonely',
+    label: '孤独',
+    mark: '孤',
+    brief: '等待回应',
+    summary: '它更像是在等陪伴或反馈，可以适当增加互动频率，让环境多一点回应感。',
+    accent: '#6e95d8',
+    soft: 'rgba(110, 149, 216, 0.16)',
+    glow: 'rgba(110, 149, 216, 0.22)'
+  },
+  {
+    key: 'sad',
+    label: '难过',
+    mark: '难',
+    brief: '情绪偏低',
+    summary: '现在更适合安静观察，减少刺激，再结合休息和食欲一起判断状态变化。',
+    accent: '#8a7fb3',
+    soft: 'rgba(138, 127, 179, 0.16)',
+    glow: 'rgba(138, 127, 179, 0.22)'
+  }
 ]
 
-let gaugeChart = null
-let voiceChart = null
-let fluctuationChart = null
-
-function getVoiceCategories() {
-  const size = Math.max(voiceFrequency.value.length, voiceTone.value.length, 1)
-  return Array.from({ length: size }, (_, index) => `${index + 1}`)
+const fallbackMood = {
+  key: 'unknown',
+  label: '',
+  mark: '--',
+  brief: '暂无情绪数据',
+  summary: '当前还没有可用的真实情绪返回，页面会在收到真实结果后再更新。',
+  accent: '#7d8a99',
+  soft: 'rgba(125, 138, 153, 0.14)',
+  glow: 'rgba(125, 138, 153, 0.2)'
 }
 
-function buildGaugeOption() {
-  return {
-    animation: false,
-    series: [
-      {
-        type: 'gauge',
-        center: ['50%', '66%'],
-        radius: '100%',
-        startAngle: 180,
-        endAngle: 0,
-        min: 0,
-        max: 100,
-        pointer: {
-          show: true,
-          icon: 'path://M6 0 L0 100 L12 100 Z',
-          length: '58%',
-          width: 10,
-          offsetCenter: [0, '-6%'],
-          itemStyle: { color: '#3f7082' }
-        },
-        anchor: {
-          show: true,
-          size: 18,
-          itemStyle: {
-            color: '#3f7082',
-            borderColor: '#ffffff',
-            borderWidth: 4
-          }
-        },
-        progress: { show: false },
-        axisLine: {
-          roundCap: true,
-          lineStyle: {
-            width: 22,
-            color: [
-              [0.34, '#d9e1ec'],
-              [0.67, '#9fddae'],
-              [1, '#56c987']
-            ]
-          }
-        },
-        splitLine: { show: false },
-        axisTick: { show: false },
-        axisLabel: { show: false },
-        detail: { show: false },
-        title: { show: false },
-        data: [{ value: emotionScore.value }]
-      }
-    ]
-  }
-}
+const moodMetaMap = new Map(emotionCatalog.map((item) => [item.label, item]))
 
-function buildVoiceOption() {
-  const categories = getVoiceCategories()
-  return {
-    animation: false,
-    grid: [
-      { left: 12, right: 12, top: 34, height: 70 },
-      { left: 12, right: 12, top: 154, height: 70 }
-    ],
-    xAxis: [
-      {
-        type: 'category',
-        data: categories,
-        gridIndex: 0,
-        boundaryGap: true,
-        axisLine: { show: false },
-        axisTick: { show: false },
-        axisLabel: { show: false }
-      },
-      {
-        type: 'category',
-        data: categories,
-        gridIndex: 1,
-        boundaryGap: true,
-        axisLine: { show: false },
-        axisTick: { show: false },
-        axisLabel: {
-          color: '#7b8aa0',
-          fontSize: 12,
-          margin: 14,
-          formatter(value, index) {
-            if (index === 0) return '低频'
-            if (index === categories.length - 1) return '高频'
-            return ''
-          }
-        }
-      }
-    ],
-    yAxis: [
-      { type: 'value', gridIndex: 0, max: 28, show: false },
-      { type: 'value', gridIndex: 1, max: 28, show: false }
-    ],
-    graphic: [
-      {
-        type: 'text',
-        left: 10,
-        top: 6,
-        style: {
-          text: '频率',
-          fill: '#1f2933',
-          fontSize: 16,
-          fontWeight: 600
-        }
-      },
-      {
-        type: 'text',
-        left: 10,
-        top: 126,
-        style: {
-          text: '音调',
-          fill: '#1f2933',
-          fontSize: 16,
-          fontWeight: 600
-        }
-      }
-    ],
-    series: [
-      {
-        type: 'bar',
-        xAxisIndex: 0,
-        yAxisIndex: 0,
-        data: voiceFrequency.value,
-        barWidth: '68%',
-        itemStyle: {
-          borderRadius: [999, 999, 999, 999],
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: '#2f677e' },
-            { offset: 1, color: '#67c691' }
-          ])
-        }
-      },
-      {
-        type: 'bar',
-        xAxisIndex: 1,
-        yAxisIndex: 1,
-        data: voiceTone.value,
-        barWidth: '68%',
-        itemStyle: {
-          borderRadius: [999, 999, 999, 999],
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: '#9adfba' },
-            { offset: 1, color: '#d9ece1' }
-          ])
-        }
-      }
-    ]
-  }
-}
-
-function buildFluctuationOption() {
-  return {
-    animation: false,
-    grid: { left: 8, right: 8, top: 8, bottom: 30 },
-    xAxis: {
-      type: 'category',
-      boundaryGap: false,
-      data: fluctuationTimeline.value,
-      axisLine: { show: false },
-      axisTick: { show: false },
-      axisLabel: {
-        color: '#8b95a7',
-        fontSize: 11,
-        interval: 0,
-        margin: 10
-      }
-    },
-    yAxis: {
-      type: 'value',
-      min: 20,
-      max: 80,
-      axisLine: { show: false },
-      axisTick: { show: false },
-      axisLabel: { show: false },
-      splitLine: {
-        lineStyle: {
-          color: ['rgba(120, 136, 158, 0.1)']
-        }
-      }
-    },
-    series: [
-      {
-        type: 'line',
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 8,
-        data: fluctuationMetrics.value,
-        lineStyle: {
-          width: 2.5,
-          color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-            { offset: 0, color: '#c5a353' },
-            { offset: 1, color: '#7ab6d3' }
-          ])
-        },
-        itemStyle: {
-          color(params) {
-            return params.dataIndex < 3 ? '#c5a353' : '#7ab6d3'
-          },
-          borderWidth: 2,
-          borderColor: '#ffffff'
-        },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(122, 182, 211, 0.18)' },
-            { offset: 1, color: 'rgba(122, 182, 211, 0)' }
-          ])
-        }
-      }
-    ]
-  }
-}
-
-function updateCharts() {
-  if (gaugeChart) gaugeChart.setOption(buildGaugeOption())
-  if (voiceChart) voiceChart.setOption(buildVoiceOption())
-  if (fluctuationChart) fluctuationChart.setOption(buildFluctuationOption())
-}
-
-function initCharts() {
-  if (gaugeChartEl.value && !gaugeChart) {
-    gaugeChart = echarts.init(gaugeChartEl.value)
-  }
-  if (voiceChartEl.value && !voiceChart) {
-    voiceChart = echarts.init(voiceChartEl.value)
-  }
-  if (fluctuationChartEl.value && !fluctuationChart) {
-    fluctuationChart = echarts.init(fluctuationChartEl.value)
-  }
-  updateCharts()
-}
-
-function handleResize() {
-  gaugeChart?.resize()
-  voiceChart?.resize()
-  fluctuationChart?.resize()
-}
-
-function destroyCharts() {
-  gaugeChart?.dispose()
-  voiceChart?.dispose()
-  fluctuationChart?.dispose()
-  gaugeChart = null
-  voiceChart = null
-  fluctuationChart = null
-}
-
-function handleCarouselScroll(event) {
-  const container = event.target
-  const index = Math.round(container.scrollLeft / container.clientWidth)
-  activeSlide.value = Math.max(0, Math.min(analysisSlides.length - 1, index))
-}
-
-function setActiveSlide(index) {
-  activeSlide.value = index
-  if (!carouselRef.value) return
-  carouselRef.value.scrollTo({
-    left: carouselRef.value.clientWidth * index,
-    behavior: 'smooth'
-  })
-}
-
-watch(
-  emotion,
-  () => {
-    if (gaugeChart || voiceChart || fluctuationChart) {
-      updateCharts()
-    }
-  },
-  { deep: true }
+const currentMood = computed(() =>
+  typeof emotion.value.currentMood === 'string' ? emotion.value.currentMood.trim() : ''
 )
+const hasMoodData = computed(() => Boolean(currentMood.value))
+const currentMoodDisplay = computed(() => currentMood.value || '等待同步')
+const currentMoodMeta = computed(() => moodMetaMap.get(currentMood.value) || fallbackMood)
+const createdAtText = computed(() => formatTime(emotion.value.createdAt))
+const heroSummary = computed(() =>
+  hasMoodData.value ? currentMoodMeta.value.summary : fallbackMood.summary
+)
+
+const historyBadges = computed(() =>
+  Array.isArray(emotion.value.history) ? emotion.value.history.slice(0, 4) : []
+)
+
+const moodOptions = computed(() =>
+  emotionCatalog.map((item) => ({
+    ...item,
+    active: item.label === currentMood.value
+  }))
+)
+
+const heroTheme = computed(() => ({
+  '--emotion-accent': currentMoodMeta.value.accent,
+  '--emotion-soft': currentMoodMeta.value.soft,
+  '--emotion-glow': currentMoodMeta.value.glow
+}))
 
 onMounted(async () => {
   await refreshEmotionBundle()
   startEmotionPolling()
-  await nextTick()
-  initCharts()
-  window.addEventListener('resize', handleResize)
 })
 
 onBeforeUnmount(() => {
   stopEmotionPolling()
-  window.removeEventListener('resize', handleResize)
-  destroyCharts()
 })
+
+function formatTime(value) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed <= 0) return '--'
+  return new Date(parsed).toLocaleString('zh-CN', { hour12: false })
+}
 </script>
 
 <template>
   <main class="emotion-page">
-    <section class="summary-panel">
-      <article class="hero-card">
-        <div class="hero-header">
-          <div class="avatar">情</div>
-          <div class="hero-copy">
-            <h1>宠物情绪</h1>
-          </div>
-          <span class="mood-pill">{{ currentMood }}</span>
-        </div>
-
-        <div class="gauge-wrap">
-          <div ref="gaugeChartEl" class="gauge-chart"></div>
-          <span class="gauge-label gauge-label-left">压力</span>
-          <span class="gauge-label gauge-label-center">平静</span>
-          <span class="gauge-label gauge-label-right">愉悦</span>
-
-          <div class="gauge-center-face">
-            <span class="pet-head"></span>
-            <span class="pet-ear pet-ear-left"></span>
-            <span class="pet-ear pet-ear-right"></span>
-            <span class="pet-eye pet-eye-left"></span>
-            <span class="pet-eye pet-eye-right"></span>
-            <span class="pet-snout"></span>
-            <span class="pet-nose"></span>
-            <span class="pet-mouth"></span>
-          </div>
-        </div>
-
-        <p class="emotion-current">{{ currentMood }}</p>
-        <p v-if="errorMessage" class="emotion-status error">{{ errorMessage }}</p>
-      </article>
-    </section>
-
-    <section class="analysis-section">
-      <div ref="carouselRef" class="analysis-carousel" @scroll.passive="handleCarouselScroll">
-        <article class="analysis-card">
-          <div class="card-head">
-            <div>
-              <h2>{{ analysisSlides[0].title }}</h2>
-              <p>{{ analysisSlides[0].subtitle }}</p>
-            </div>
-          </div>
-          <div ref="voiceChartEl" class="voice-chart"></div>
-        </article>
-
-        <article class="analysis-card">
-          <div class="card-head">
-            <div>
-              <h2>{{ analysisSlides[1].title }}</h2>
-              <p>{{ analysisSlides[1].subtitle }}</p>
-            </div>
-            <span class="time-pill">全天</span>
-          </div>
-
-          <div class="trend-card">
-            <div class="trend-title">
-              <h3>情绪波动</h3>
-            </div>
-            <div class="fluctuation-wrap">
-              <div ref="fluctuationChartEl" class="fluctuation-chart"></div>
-              <div class="curve-axis-labels">
-                <span>愉悦</span>
-                <span>焦虑</span>
-              </div>
-            </div>
-          </div>
-        </article>
+    <section class="emotion-card" :style="heroTheme">
+      <div class="card-top">
+        <span class="card-kicker">情绪状态</span>
       </div>
 
-      <div class="carousel-dots">
-        <button
-          v-for="(slide, index) in analysisSlides"
-          :key="slide.key"
-          class="dot"
-          :class="{ active: activeSlide === index }"
-          type="button"
-          :aria-label="`切换到${slide.title}`"
-          @click="setActiveSlide(index)"
-        ></button>
+      <div class="hero-layout">
+        <div class="hero-copy">
+          <h1>{{ currentMoodDisplay }}</h1>
+          <p class="hero-brief">{{ currentMoodMeta.brief }}</p>
+          <p class="hero-summary">{{ heroSummary }}</p>
+        </div>
+
+        <div class="hero-badge" aria-hidden="true">
+          <div class="hero-badge-core">{{ currentMoodMeta.mark }}</div>
+        </div>
+      </div>
+
+      <div class="card-foot">
+        <span v-if="createdAtText !== '--'" class="meta-chip">更新于 {{ createdAtText }}</span>
+        <span v-if="historyBadges.length" class="meta-chip">已返回摘要</span>
+      </div>
+
+      <div class="state-strip">
+        <article
+          v-for="item in moodOptions"
+          :key="item.key"
+          class="state-pill"
+          :class="{ 'state-pill-active': item.active }"
+          :style="{ '--mood-accent': item.accent, '--mood-soft': item.soft }"
+        >
+          <span class="state-pill-mark">{{ item.mark }}</span>
+          <span class="state-pill-text">
+            <strong>{{ item.label }}</strong>
+            <small>{{ item.brief }}</small>
+          </span>
+        </article>
       </div>
     </section>
 
-    <section class="history-card">
-      <div class="history-head">
-        <h2>情绪摘要</h2>
-        <span>最近一天</span>
+    <section v-if="historyBadges.length" class="summary-card">
+      <div class="summary-head">
+        <span class="card-kicker">补充摘要</span>
+        <h2>当前返回内容</h2>
       </div>
-      <div class="history-list">
-        <div v-for="item in moodHistory" :key="item.label" class="history-item">
+
+      <div class="summary-grid">
+        <div
+          v-for="(item, index) in historyBadges"
+          :key="`${item.label}-${index}`"
+          class="summary-pill"
+        >
           <span>{{ item.label }}</span>
           <strong>{{ item.value }}</strong>
         </div>
-        <div v-if="!moodHistory.length" class="history-empty">暂无情绪摘要</div>
       </div>
     </section>
   </main>
