@@ -120,7 +120,7 @@ onBeforeUnmount(() => {
         <div class="placeholder-card">
           <span class="placeholder-kicker">{{ tabs.find((tab) => tab.key === activeTab)?.label }}</span>
           <h2>{{ tabs.find((tab) => tab.key === activeTab)?.label }}功能即将开放</h2>
-          <p>当前版本先聚焦项圈、宠舍与情绪模块，后续会补充更多宠物陪伴能力。</p>
+          <p>当前版本先照顾项圈、宠舍与情绪模块，后续会补充更多宠物陪伴能力。</p>
         </div>
       </section>
     </main>
@@ -178,7 +178,7 @@ onBeforeUnmount(() => {
           <circle cx="8" cy="16.5" r="0.9" fill="currentColor" />
         </svg>
       </span>
-      <span class="server-fab-text">服务器</span>
+      <span class="server-fab-text">服务</span>
     </button>
 
     <ApiEndpointSheet

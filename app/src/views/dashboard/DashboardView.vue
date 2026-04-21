@@ -3,12 +3,15 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ensureVideoStreamUrl, getVideoStreamUrl } from '../../config/api'
 import { usePetApi } from '../../composables/usePetApi'
 
+const petPhotoUrl =
+  'https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=240&q=80'
+
 const fallbackHouse = {
   id: 1,
   name: '当前宠舍',
   petName: '宠物状态',
-  petProfile: '已连接',
-  avatar: '🐤',
+  petProfile: '设备已连接',
+  avatar: '汪',
   notificationCount: 1,
   environment: {
     temperature: { value: 24, status: '舒适', unit: '°C' },
@@ -138,9 +141,9 @@ const selectedHouse = computed(() => ({
   emotion: {
     primary: emotion.value?.currentMood || fallbackHouse.emotion.primary,
     secondary: errorMessage.value
-      ? '等待恢复'
+      ? '稍后再试'
       : loading.value
-        ? '同步中'
+        ? '正在同步'
         : fallbackHouse.emotion.secondary
   }
 }))
@@ -156,11 +159,11 @@ const streamSrc = computed(() => {
 const liveViewStatus = computed(() => {
   if (!selectedHouse.value.liveView.hasVideo) {
     if (isVideoConnecting.value) return '搜索中'
-    return loading.value ? '发现视频中' : '无视频源'
+    return loading.value ? '发现视频中' : '暂无画面'
   }
 
   if (isVideoConnecting.value) return '连接中'
-  if (hasVideoError.value) return '监控离线'
+  if (hasVideoError.value) return '暂时离线'
   return selectedHouse.value.liveView.status
 })
 
@@ -236,14 +239,15 @@ onBeforeUnmount(() => {
 <template>
   <div class="pet-house-view">
     <section class="boarding-card">
-      <div class="card-header">
+      <header class="card-header">
         <div class="header-copy">
-          <h1 class="page-title">宠舍照护总览</h1>
+          <span class="page-kicker">宠舍总览</span>
+          <h1 class="page-title">今天也在好好陪伴</h1>
         </div>
 
         <div class="header-top">
           <div class="dog-avatar-container">
-            <div class="dog-avatar">{{ selectedHouse.avatar }}</div>
+            <img class="dog-avatar" :src="petPhotoUrl" alt="可爱的宠物照片" />
           </div>
           <div class="boarding-info">
             <div class="house-name">{{ selectedHouse.name }}</div>
@@ -259,19 +263,26 @@ onBeforeUnmount(() => {
             <span v-if="selectedHouse.notificationCount" class="badge">{{ selectedHouse.notificationCount }}</span>
           </div>
         </div>
-      </div>
+      </header>
 
-      <div class="section">
-        <h3 class="section-title">环境监测</h3>
+      <section class="section">
+        <div class="section-heading">
+          <h3 class="section-title">环境监测</h3>
+          <span class="section-note">{{ selectedHouse.environment.temperature.status }}</span>
+        </div>
         <div class="env-grid">
           <div class="env-card temperature">
-            <div class="env-icon env-icon-temperature" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M12 4a2 2 0 0 0-2 2v7.2a4 4 0 1 0 4 0V6a2 2 0 0 0-2-2Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-                <path d="M12 10v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-              </svg>
+            <div style="display: flex;gap:20px;">
+              <div class="env-icon env-icon-temperature" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M12 4a2 2 0 0 0-2 2v7.2a4 4 0 1 0 4 0V6a2 2 0 0 0-2-2Z" stroke="currentColor"
+                    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                  <path d="M12 10v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                </svg>
+              </div>
+              <div class="env-label">温度</div>
             </div>
-            <div class="env-label">温度</div>
+
             <div class="env-value">
               <span>{{ selectedHouse.environment.temperature.value }}</span>
               <span class="env-unit">{{ selectedHouse.environment.temperature.unit }}</span>
@@ -279,12 +290,15 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="env-card humidity">
-            <div class="env-icon env-icon-humidity" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M12 3.5s-5 6.1-5 10a5 5 0 0 0 10 0c0-3.9-5-10-5-10Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-              </svg>
+            <div style="display: flex;gap:20px;">
+              <div class="env-icon env-icon-humidity" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M12 3.5s-5 6.1-5 10a5 5 0 0 0 10 0c0-3.9-5-10-5-10Z" stroke="currentColor" stroke-width="1.8"
+                    stroke-linejoin="round" />
+                </svg>
+              </div>
+              <div class="env-label">湿度</div>
             </div>
-            <div class="env-label">湿度</div>
             <div class="env-value">
               <span>{{ selectedHouse.environment.humidity.value }}</span>
               <span class="env-unit">{{ selectedHouse.environment.humidity.unit }}</span>
@@ -296,81 +310,85 @@ onBeforeUnmount(() => {
               <div class="env-label">空气质量</div>
               <div class="env-value">
                 <span>{{ selectedHouse.environment.airQuality.value }}</span>
-                <span v-if="selectedHouse.environment.airQuality.unit" class="env-unit">{{ selectedHouse.environment.airQuality.unit }}</span>
+                <span v-if="selectedHouse.environment.airQuality.unit" class="env-unit">{{
+                  selectedHouse.environment.airQuality.unit }}</span>
               </div>
             </div>
             <div class="env-metric-group env-metric-group-secondary">
-              <div class="env-sub-label">二氧化碳浓度</div>
+              <div class="env-sub-label">CO2 浓度</div>
               <div class="env-value env-value-secondary">
                 <span>{{ selectedHouse.environment.co2.value }}</span>
-                <span v-if="selectedHouse.environment.co2.unit" class="env-unit">{{ selectedHouse.environment.co2.unit }}</span>
+                <span v-if="selectedHouse.environment.co2.unit" class="env-unit">{{ selectedHouse.environment.co2.unit
+                }}</span>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="section">
-        <h3 class="section-title">实时看护</h3>
+      <section class="section">
+        <div class="section-heading">
+          <h3 class="section-title">实时看护</h3>
+        </div>
         <div class="live-view">
           <div class="video-placeholder">
-            <img
-              v-if="selectedHouse.liveView.hasVideo && !hasVideoError"
-              :key="streamSrc"
-              :src="streamSrc"
-              alt="宠舍监控画面"
-              class="video-stream"
-              :class="{ connecting: isVideoConnecting }"
-              @load="handleStreamLoad"
-              @error="handleStreamError"
-            />
+            <img v-if="selectedHouse.liveView.hasVideo && !hasVideoError" :key="streamSrc" :src="streamSrc" alt="宠舍监控画面"
+              class="video-stream" :class="{ connecting: isVideoConnecting }" @load="handleStreamLoad"
+              @error="handleStreamError" />
             <div v-if="isVideoConnecting" class="video-overlay connecting">
               <span class="video-spinner" aria-hidden="true"></span>
-              <span class="video-overlay-text">正在连接监控画面...</span>
+              <span class="video-overlay-text">正在连接看护画面，请稍等一下</span>
             </div>
             <div v-else-if="!selectedHouse.liveView.hasVideo || hasVideoError" class="video-overlay offline">
-              <span class="video-icon">📴</span>
+              <span class="video-icon">看护</span>
               <span class="video-overlay-text">
-                {{ selectedHouse.liveView.hasVideo ? '监控已离线或无法连接' : '等待发现局域网视频源' }}
+                {{ selectedHouse.liveView.hasVideo ? '看护画面暂时离线，宠舍数据仍会继续同步' : '还没有发现局域网视频源，可以稍后再试' }}
               </span>
-              <button
-                type="button"
-                class="reconnect-button"
-                @click="reconnectStream"
-              >
+              <button type="button" class="reconnect-button" @click="reconnectStream">
                 {{ selectedHouse.liveView.hasVideo ? '重新连接' : '重新搜索' }}
               </button>
             </div>
-            <span class="video-badge" :class="{ offline: hasVideoError, connecting: isVideoConnecting }">{{ liveViewStatus }}</span>
+            <span class="video-badge" :class="{ offline: hasVideoError, connecting: isVideoConnecting }">{{
+              liveViewStatus }}</span>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="section">
-        <h3 class="section-title">饮食与饮水</h3>
+      <section class="section">
+        <div class="section-heading">
+          <h3 class="section-title">饮食与饮水</h3>
+        </div>
         <div class="appetite-section">
           <div class="appetite-item">
-            <div class="appetite-label">食物摄入</div>
+            <div class="appetite-label">
+              <span>食物摄入</span>
+              <strong>{{ selectedHouse.appetite.foodIntake }}%</strong>
+            </div>
             <div class="progress-bar">
               <div class="progress-fill" :style="{ width: `${selectedHouse.appetite.foodIntake}%` }"></div>
             </div>
           </div>
           <div class="appetite-item">
-            <div class="appetite-label">饮水进度</div>
+            <div class="appetite-label">
+              <span>饮水进度</span>
+              <strong>{{ selectedHouse.appetite.waterConsumption }}%</strong>
+            </div>
             <div class="progress-bar">
               <div class="progress-fill water" :style="{ width: `${selectedHouse.appetite.waterConsumption}%` }"></div>
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="section">
-        <h3 class="section-title">情绪反馈</h3>
+      <section class="section">
+        <div class="section-heading">
+          <h3 class="section-title">情绪反馈</h3>
+        </div>
         <div class="emotion-badges">
           <div class="emotion-badge happy">{{ selectedHouse.emotion.primary }}</div>
           <div class="emotion-badge playful">{{ selectedHouse.emotion.secondary }}</div>
         </div>
-      </div>
+      </section>
     </section>
   </div>
 </template>

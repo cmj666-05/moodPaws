@@ -5,12 +5,13 @@ import { amapConfig } from '../../config/amap'
 import { usePetApi } from '../../composables/usePetApi'
 import { loadAmap } from '../../services/amap/loader'
 
+const petPhotoUrl =
+  'https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=240&q=80'
+
 let echartsRuntimePromise = null
 
 async function loadEchartsRuntime() {
-  if (echartsRuntimePromise) {
-    return echartsRuntimePromise
-  }
+  if (echartsRuntimePromise) return echartsRuntimePromise
 
   echartsRuntimePromise = Promise.all([
     import('echarts/core'),
@@ -100,6 +101,9 @@ const spo2 = computed(() => homeMetrics.value.spo2)
 const weight = computed(() => homeMetrics.value.weight)
 const longitude = computed(() => homeMetrics.value.longitude)
 const latitude = computed(() => homeMetrics.value.latitude)
+const heartRateValue = computed(() => heartRate.value?.value ?? hrHistory.value[hrHistory.value.length - 1]?.v)
+const spo2Value = computed(() => spo2.value?.value)
+const weightValue = computed(() => weight.value?.value)
 
 const petMood = computed(() => emotion.value.currentMood || '开心')
 const stepCount = computed(() => Number(latestTelemetry.value?.stepCount) || 0)
@@ -119,12 +123,12 @@ const hasCoordinates = computed(() => {
   return isValidCoordinatePair(lng, lat)
 })
 
-const locationStatusText = computed(() => (hasCoordinates.value ? '定位正常' : '等待定位'))
+const locationStatusText = computed(() => (hasCoordinates.value ? '定位正常' : '定位中'))
+const statusText = computed(() => (isOnline.value ? '在线' : isConnecting.value ? '连接中' : '暂离线'))
+const platformText = computed(() => (isWeb ? '智能项圈' : '贴身守护'))
 
 function scheduleDeferredTask(callback, timeout = 240) {
-  if (typeof window === 'undefined') {
-    return null
-  }
+  if (typeof window === 'undefined') return null
 
   if (typeof window.requestIdleCallback === 'function') {
     return window.requestIdleCallback(callback, { timeout })
@@ -134,9 +138,7 @@ function scheduleDeferredTask(callback, timeout = 240) {
 }
 
 function clearDeferredTask(taskId) {
-  if (taskId == null || typeof window === 'undefined') {
-    return
-  }
+  if (taskId == null || typeof window === 'undefined') return
 
   if (typeof window.cancelIdleCallback === 'function') {
     window.cancelIdleCallback(taskId)
@@ -150,7 +152,7 @@ function buildHrOption(data, graphic) {
   const values = data.map((item) => item.v)
   return {
     animation: false,
-    grid: { top: 8, bottom: 4, left: 0, right: 0 },
+    grid: { top: 4, bottom: 2, left: 0, right: 0 },
     xAxis: {
       type: 'category',
       show: false,
@@ -169,11 +171,11 @@ function buildHrOption(data, graphic) {
         data: values,
         smooth: true,
         symbol: 'none',
-        lineStyle: { color: '#d56a6a', width: 2.2 },
+        lineStyle: { color: '#d97368', width: 2 },
         areaStyle: {
           color: new graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(213,106,106,0.18)' },
-            { offset: 1, color: 'rgba(213,106,106,0.02)' }
+            { offset: 0, color: 'rgba(217,115,104,0.18)' },
+            { offset: 1, color: 'rgba(217,115,104,0.02)' }
           ])
         }
       }
@@ -235,7 +237,7 @@ function updateTrack() {
   polyline.setPath(path)
 
   if (path.length > 1) {
-    map.setFitView([marker, polyline], false, [24, 24, 24, 24], 15)
+    map.setFitView([marker, polyline], false, [16, 16, 16, 16], 15)
     return
   }
 
@@ -272,7 +274,7 @@ async function setupMap() {
       })
 
       polyline = new AMap.Polyline({
-        strokeColor: '#4f7b99',
+        strokeColor: '#5f8f72',
         strokeWeight: 4,
         strokeOpacity: 0.88,
         lineJoin: 'round',
@@ -308,18 +310,13 @@ function observeMapSection() {
   mapVisibilityObserver = new window.IntersectionObserver(
     (entries) => {
       const visible = entries.some((entry) => entry.isIntersecting || entry.intersectionRatio > 0)
-
-      if (!visible) {
-        return
-      }
+      if (!visible) return
 
       isMapSectionVisible.value = true
       mapVisibilityObserver?.disconnect()
       mapVisibilityObserver = null
     },
-    {
-      rootMargin: '180px 0px'
-    }
+    { rootMargin: '100px 0px' }
   )
 
   mapVisibilityObserver.observe(mapSectionEl.value)
@@ -405,19 +402,14 @@ onBeforeUnmount(() => {
   <main class="collar-page">
     <section class="hero-card">
       <div class="hero-main">
-        <div class="avatar">
-          <svg viewBox="0 0 40 40" width="24" height="24" fill="currentColor">
-            <ellipse cx="12" cy="10" rx="4" ry="5" />
-            <ellipse cx="28" cy="10" rx="4" ry="5" />
-            <ellipse cx="7" cy="22" rx="3.5" ry="4.5" />
-            <ellipse cx="33" cy="22" rx="3.5" ry="4.5" />
-            <path d="M20 36c-6 0-12-4-12-9s4-8 12-8 12 3 12 8-6 9-12 9z" />
-          </svg>
+        <div class="avatar" aria-label="Lucky 的金毛头像">
+          <img class="pet-avatar-photo" :src="petPhotoUrl" alt="Lucky 的金毛头像" />
         </div>
 
         <div class="hero-copy">
+          <span class="hero-kicker">项圈监测</span>
           <h1>Lucky</h1>
-          <p>金毛寻回犬 · 3 岁</p>
+          <p>金毛寻回犬 · 3 岁 · {{ platformText }}</p>
         </div>
 
         <button
@@ -426,7 +418,7 @@ onBeforeUnmount(() => {
           @click="handleStatusTap"
         >
           <span class="status-dot"></span>
-          {{ isOnline ? '在线' : isConnecting ? '连接中' : '离线' }}
+          {{ statusText }}
         </button>
       </div>
 
@@ -435,19 +427,21 @@ onBeforeUnmount(() => {
           <span class="meta-dot"></span>
           {{ locationStatusText }}
         </span>
-        <span class="meta-pill">当前心情 · {{ petMood }}</span>
-        <span class="meta-note">{{ isWeb ? '网页模式' : '原生模式' }}</span>
+        <span class="meta-pill">心情 · {{ petMood }}</span>
       </div>
     </section>
 
     <div v-if="errorMessage" class="error-bar">
       <span>{{ errorMessage }}</span>
-      <button type="button" class="error-bar-action" @click="openServerSettings">服务器设置</button>
+      <button type="button" class="error-bar-action" @click="openServerSettings">服务器</button>
     </div>
 
     <section class="section-block health-section">
       <div class="section-heading">
-        <h2>健康监测</h2>
+        <div>
+          <span class="section-kicker">HEALTH</span>
+          <h2>健康监测</h2>
+        </div>
       </div>
 
       <div class="health-grid">
@@ -461,8 +455,8 @@ onBeforeUnmount(() => {
             <div>
               <span class="metric-title">心率</span>
               <div class="metric-value-row">
-                <strong>{{ heartRate?.value ?? hrHistory[hrHistory.length - 1]?.v ?? '--' }}</strong>
-                <span>bpm</span>
+                <strong>{{ heartRateValue ?? '未记录' }}</strong>
+                <span v-if="heartRateValue != null">bpm</span>
               </div>
             </div>
           </div>
@@ -470,42 +464,50 @@ onBeforeUnmount(() => {
         </article>
 
         <article class="metric-card compact-card">
-          <div class="metric-icon icon-spo2">
+          <div style="display: flex;gap:20px;">
+            <div class="metric-icon icon-spo2">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
               <path d="M12 2C12 2 5 10.5 5 15a7 7 0 0014 0c0-4.5-7-13-7-13z" />
             </svg>
           </div>
           <span class="metric-title">血氧</span>
+          </div>
           <div class="metric-value-row">
-            <strong>{{ spo2?.value ?? '--' }}</strong>
-            <span>%</span>
+            <strong>{{ spo2Value ?? '未记录' }}</strong>
+            <span v-if="spo2Value != null">%</span>
           </div>
         </article>
 
         <article class="metric-card compact-card">
-          <div class="metric-icon icon-weight">
+          <div style="display: flex;gap:20px;">
+            <div class="metric-icon icon-weight">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
             </svg>
           </div>
           <span class="metric-title">体重</span>
+          </div>
           <div class="metric-value-row">
-            <strong>{{ weight?.value ?? '--' }}</strong>
-            <span>kg</span>
+            <strong>{{ weightValue ?? '未记录' }}</strong>
+            <span v-if="weightValue != null">kg</span>
           </div>
         </article>
       </div>
     </section>
 
-    <section class="section-block">
+    <section class="section-block location-section">
       <div class="section-heading">
-        <h2>位置轨迹</h2>
+        <div>
+          <span class="section-kicker">LOCATION</span>
+          <h2>位置轨迹</h2>
+        </div>
       </div>
 
       <article ref="mapSectionEl" class="map-card">
         <div ref="mapContainer" class="map-panel" :class="{ empty: !hasCoordinates || !!mapError }">
           <div v-if="!hasCoordinates" class="map-overlay">
-            <p>等待 GPS 坐标</p>
+            <p>定位中</p>
+            <span>项圈在线后会自动显示位置</span>
           </div>
           <div v-else-if="mapError" class="map-overlay">
             <p>地图加载失败</p>
@@ -516,36 +518,39 @@ onBeforeUnmount(() => {
         <div class="map-meta">
           <div class="map-meta-item">
             <span>经度</span>
-            <strong>{{ longitude?.value ?? '--' }}</strong>
+            <strong>{{ longitude?.value ?? '待更新' }}</strong>
           </div>
           <div class="map-meta-item">
             <span>纬度</span>
-            <strong>{{ latitude?.value ?? '--' }}</strong>
+            <strong>{{ latitude?.value ?? '待更新' }}</strong>
           </div>
           <div class="map-meta-item">
-            <span>定位状态</span>
+            <span>定位</span>
             <strong>{{ locationStatusText }}</strong>
           </div>
         </div>
       </article>
     </section>
 
-    <section class="section-block">
+    <section class="section-block activity-section">
       <div class="section-heading">
-        <h2>活动状态</h2>
+        <div>
+          <span class="section-kicker">ACTIVITY</span>
+          <h2>活动状态</h2>
+        </div>
       </div>
 
       <div class="summary-grid">
         <article class="summary-card">
           <span class="summary-label">今日步数</span>
           <strong>{{ stepCount }}</strong>
-          <span class="summary-foot">由服务端根据首页计步口径统计</span>
+          <span class="summary-foot">今日活动记录</span>
         </article>
 
         <article class="summary-card">
           <span class="summary-label">情绪状态</span>
           <strong>{{ petMood }}</strong>
-          <span class="summary-foot">当前表现较稳定</span>
+          <span class="summary-foot">当前较稳定</span>
         </article>
       </div>
     </section>
