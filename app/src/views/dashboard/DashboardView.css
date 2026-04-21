@@ -287,7 +287,7 @@
 }
 
 .video-placeholder {
-  height: 142px;
+  height: 200px;
   background:
     radial-gradient(circle at 28% 24%, rgba(255, 255, 255, 0.36), transparent 28%),
     linear-gradient(135deg, #d89a67 0%, #98b780 100%);

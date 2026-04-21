@@ -69,8 +69,8 @@ const fallbackMood = {
   key: 'unknown',
   label: '',
   mark: '等',
-  brief: '等待情绪同步',
-  summary: '还没有收到稳定的情绪结果。页面会在拿到真实数据后自动更新，你也可以稍后再回来看看。',
+  brief: '今日还没有新记录',
+  summary: '先保持日常陪伴，新的情绪状态会在有足够信号后自动呈现。',
   accent: '#7d8a78',
   soft: 'rgba(125, 138, 120, 0.14)',
   glow: 'rgba(125, 138, 120, 0.2)'
@@ -127,7 +127,7 @@ function formatTime(value) {
     <section class="emotion-card" :style="heroTheme">
       <div class="card-top">
         <span class="card-kicker">情绪状态</span>
-        <span class="sync-chip">{{ createdAtText !== '--' ? '已更新' : '等待同步' }}</span>
+        <span class="sync-chip">{{ createdAtText !== '--' ? '已更新' : '今日待观察' }}</span>
       </div>
 
       <div class="hero-layout">
@@ -167,7 +167,7 @@ function formatTime(value) {
     <section class="summary-card">
       <div class="summary-head">
         <span class="card-kicker">陪伴建议</span>
-        <h2>{{ historyBadges.length ? '当前返回内容' : '温柔等待' }}</h2>
+        <h2>{{ historyBadges.length ? '情绪小结' : '陪伴小贴士' }}</h2>
       </div>
 
       <div v-if="historyBadges.length" class="summary-grid">
@@ -182,7 +182,7 @@ function formatTime(value) {
       </div>
 
       <p v-else class="empty-copy">
-        情绪模型还在等待新的声音或行为信号。你可以保持环境安静，稍后再查看最新判断。
+        暂时没有新的情绪变化。保持熟悉的作息和温柔互动，就是很好的陪伴。
       </p>
     </section>
   </main>

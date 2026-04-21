@@ -340,7 +340,7 @@ onBeforeUnmount(() => {
               <span class="video-overlay-text">正在连接看护画面，请稍等一下</span>
             </div>
             <div v-else-if="!selectedHouse.liveView.hasVideo || hasVideoError" class="video-overlay offline">
-              <span class="video-icon">CAM</span>
+              <span class="video-icon">看护</span>
               <span class="video-overlay-text">
                 {{ selectedHouse.liveView.hasVideo ? '看护画面暂时离线，宠舍数据仍会继续同步' : '还没有发现局域网视频源，可以稍后再试' }}
               </span>

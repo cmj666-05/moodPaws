@@ -101,6 +101,9 @@ const spo2 = computed(() => homeMetrics.value.spo2)
 const weight = computed(() => homeMetrics.value.weight)
 const longitude = computed(() => homeMetrics.value.longitude)
 const latitude = computed(() => homeMetrics.value.latitude)
+const heartRateValue = computed(() => heartRate.value?.value ?? hrHistory.value[hrHistory.value.length - 1]?.v)
+const spo2Value = computed(() => spo2.value?.value)
+const weightValue = computed(() => weight.value?.value)
 
 const petMood = computed(() => emotion.value.currentMood || '开心')
 const stepCount = computed(() => Number(latestTelemetry.value?.stepCount) || 0)
@@ -120,8 +123,9 @@ const hasCoordinates = computed(() => {
   return isValidCoordinatePair(lng, lat)
 })
 
-const locationStatusText = computed(() => (hasCoordinates.value ? '定位正常' : '等待定位'))
+const locationStatusText = computed(() => (hasCoordinates.value ? '定位正常' : '定位中'))
 const statusText = computed(() => (isOnline.value ? '在线' : isConnecting.value ? '连接中' : '暂离线'))
+const platformText = computed(() => (isWeb ? '智能项圈' : '贴身守护'))
 
 function scheduleDeferredTask(callback, timeout = 240) {
   if (typeof window === 'undefined') return null
@@ -405,7 +409,7 @@ onBeforeUnmount(() => {
         <div class="hero-copy">
           <span class="hero-kicker">项圈监测</span>
           <h1>Lucky</h1>
-          <p>金毛寻回犬 · 3 岁 · {{ isWeb ? '网页' : '原生' }}</p>
+          <p>金毛寻回犬 · 3 岁 · {{ platformText }}</p>
         </div>
 
         <button
@@ -451,8 +455,8 @@ onBeforeUnmount(() => {
             <div>
               <span class="metric-title">心率</span>
               <div class="metric-value-row">
-                <strong>{{ heartRate?.value ?? hrHistory[hrHistory.length - 1]?.v ?? '--' }}</strong>
-                <span>bpm</span>
+                <strong>{{ heartRateValue ?? '未记录' }}</strong>
+                <span v-if="heartRateValue != null">bpm</span>
               </div>
             </div>
           </div>
@@ -460,28 +464,32 @@ onBeforeUnmount(() => {
         </article>
 
         <article class="metric-card compact-card">
-          <div class="metric-icon icon-spo2">
+          <div style="display: flex;gap:20px;">
+            <div class="metric-icon icon-spo2">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
               <path d="M12 2C12 2 5 10.5 5 15a7 7 0 0014 0c0-4.5-7-13-7-13z" />
             </svg>
           </div>
           <span class="metric-title">血氧</span>
+          </div>
           <div class="metric-value-row">
-            <strong>{{ spo2?.value ?? '--' }}</strong>
-            <span>%</span>
+            <strong>{{ spo2Value ?? '未记录' }}</strong>
+            <span v-if="spo2Value != null">%</span>
           </div>
         </article>
 
         <article class="metric-card compact-card">
-          <div class="metric-icon icon-weight">
+          <div style="display: flex;gap:20px;">
+            <div class="metric-icon icon-weight">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
             </svg>
           </div>
           <span class="metric-title">体重</span>
+          </div>
           <div class="metric-value-row">
-            <strong>{{ weight?.value ?? '--' }}</strong>
-            <span>kg</span>
+            <strong>{{ weightValue ?? '未记录' }}</strong>
+            <span v-if="weightValue != null">kg</span>
           </div>
         </article>
       </div>
@@ -498,8 +506,8 @@ onBeforeUnmount(() => {
       <article ref="mapSectionEl" class="map-card">
         <div ref="mapContainer" class="map-panel" :class="{ empty: !hasCoordinates || !!mapError }">
           <div v-if="!hasCoordinates" class="map-overlay">
-            <p>等待 GPS</p>
-            <span>收到定位后显示</span>
+            <p>定位中</p>
+            <span>项圈在线后会自动显示位置</span>
           </div>
           <div v-else-if="mapError" class="map-overlay">
             <p>地图加载失败</p>
@@ -510,11 +518,11 @@ onBeforeUnmount(() => {
         <div class="map-meta">
           <div class="map-meta-item">
             <span>经度</span>
-            <strong>{{ longitude?.value ?? '--' }}</strong>
+            <strong>{{ longitude?.value ?? '待更新' }}</strong>
           </div>
           <div class="map-meta-item">
             <span>纬度</span>
-            <strong>{{ latitude?.value ?? '--' }}</strong>
+            <strong>{{ latitude?.value ?? '待更新' }}</strong>
           </div>
           <div class="map-meta-item">
             <span>定位</span>
@@ -536,7 +544,7 @@ onBeforeUnmount(() => {
         <article class="summary-card">
           <span class="summary-label">今日步数</span>
           <strong>{{ stepCount }}</strong>
-          <span class="summary-foot">服务端计步</span>
+          <span class="summary-foot">今日活动记录</span>
         </article>
 
         <article class="summary-card">
