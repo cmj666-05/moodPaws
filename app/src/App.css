@@ -21,42 +21,49 @@
 
 .placeholder-card {
   width: min(100%, 420px);
-  padding: 28px 24px;
+  padding: 30px 24px;
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  background:
+    radial-gradient(circle at top right, rgba(242, 166, 90, 0.16), transparent 36%),
+    var(--color-surface);
   border: 1px solid var(--color-border);
   box-shadow: var(--color-shadow);
 }
 
 .placeholder-kicker {
-  display: inline-block;
+  display: inline-flex;
   margin-bottom: 10px;
-  color: var(--color-text-secondary);
-  font-size: 13px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-deep);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .placeholder-card h2 {
+  margin-bottom: 10px;
   font-size: 24px;
   line-height: 1.2;
-  margin-bottom: 10px;
 }
 
 .placeholder-card p {
   color: var(--color-text-secondary);
+  line-height: 1.7;
 }
 
 .tab-bar {
   position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: 10px;
+  left: 15px;
+  right: 15px;
+  bottom: 8px;
   height: calc(var(--tab-height) + var(--safe-bottom));
-  padding: 8px 8px calc(8px + var(--safe-bottom));
-  border: 1px solid rgba(31, 41, 51, 0.07);
+  padding: 6px 7px calc(6px + var(--safe-bottom));
+  border: 1px solid rgba(95, 76, 55, 0.1);
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(18px);
-  box-shadow: 0 12px 34px rgba(31, 41, 51, 0.08);
+  background: rgba(255, 252, 246, 0.84);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 16px 38px rgba(95, 76, 55, 0.13);
   display: flex;
   align-items: stretch;
   z-index: 100;
@@ -69,66 +76,77 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
   color: var(--color-text-muted);
-  transition: color 0.2s ease, background-color 0.2s ease;
+  transition: color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
 }
 
 .tab-btn.active {
-  color: var(--color-text);
-  background: rgba(31, 41, 51, 0.045);
+  color: var(--color-primary-deep);
+  background:
+    linear-gradient(180deg, rgba(255, 246, 232, 0.95), rgba(95, 143, 114, 0.12));
+  box-shadow: inset 0 0 0 1px rgba(95, 143, 114, 0.08);
+}
+
+.tab-btn:active {
+  transform: scale(0.98);
 }
 
 .tab-icon-wrap {
-  width: 28px;
-  height: 28px;
+  width: 25px;
+  height: 25px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .tab-svg {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
 }
 
 .tab-text {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
   line-height: 1.2;
 }
 
 .server-fab {
   position: fixed;
-  right: 16px;
-  bottom: calc(var(--tab-height) + var(--safe-bottom) + 22px);
+  right: 12px;
+  bottom: calc(var(--tab-height) + var(--safe-bottom) + 12px);
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 0 14px 0 12px;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(95, 76, 55, 0.1);
   border-radius: 999px;
-  background: rgba(31, 41, 51, 0.88);
-  color: #fff;
-  box-shadow: 0 14px 32px rgba(17, 24, 39, 0.16);
+  background: rgba(255, 252, 246, 0.76);
+  color: var(--color-text-secondary);
+  backdrop-filter: blur(14px);
+  opacity: 0.76;
+  box-shadow: 0 8px 18px rgba(95, 76, 55, 0.08);
   z-index: 130;
 }
 
 .server-fab-icon {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
 .server-fab-icon svg {
-  width: 20px;
-  height: 20px;
+  width: 17px;
+  height: 17px;
 }
 
 .server-fab-text {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
 }

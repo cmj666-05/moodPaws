@@ -154,7 +154,7 @@ function handleReset() {
         <header class="endpoint-sheet-header">
           <div>
             <p class="endpoint-sheet-kicker">服务器连接</p>
-            <h2 id="endpoint-sheet-title">手动设置后端地址</h2>
+            <h2 id="endpoint-sheet-title">设置后端地址</h2>
           </div>
           <button type="button" class="endpoint-sheet-close" aria-label="关闭" @click="closeSheet">×</button>
         </header>
@@ -178,7 +178,7 @@ function handleReset() {
             placeholder="http://10.8.34.150:3001/api"
           />
           <p class="endpoint-sheet-help">
-            填完整地址，推荐格式：`http://你的电脑IP:3001/api`
+            填写完整地址，推荐格式：`http://你的电脑IP:3001/api`
           </p>
           <p v-if="isEnvLocked" class="endpoint-sheet-help">
             当前构建已通过 `.env` 固定服务器地址，应用内修改已禁用。

@@ -9,68 +9,71 @@ const {
   stopEmotionPolling
 } = usePetApi()
 
+const petPhotoUrl =
+  'https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=240&q=80'
+
 const emotionCatalog = [
   {
     key: 'angry',
     label: '生气',
-    mark: '生',
-    brief: '高警觉',
-    summary: '它可能被刺激到了，先减少打扰、降低噪声，会比强行互动更合适。',
-    accent: '#d96b5f',
-    soft: 'rgba(217, 107, 95, 0.14)',
-    glow: 'rgba(217, 107, 95, 0.22)'
+    mark: '气',
+    brief: '需要一点距离',
+    summary: '它可能被刺激到了，先减少打扰、降低噪声，给它一点安静空间会更合适。',
+    accent: '#d97368',
+    soft: 'rgba(217, 115, 104, 0.14)',
+    glow: 'rgba(217, 115, 104, 0.22)'
   },
   {
     key: 'anxious',
     label: '焦虑',
     mark: '焦',
     brief: '需要稳定感',
-    summary: '这会更像对环境变化的敏感反应，熟悉的陪伴和稳定节奏能让它更快放松。',
-    accent: '#e0a24f',
-    soft: 'rgba(224, 162, 79, 0.16)',
-    glow: 'rgba(224, 162, 79, 0.2)'
+    summary: '这更像是对环境变化的敏感反应。熟悉的陪伴、稳定的节奏和轻声安抚能帮它更快放松。',
+    accent: '#e4a14e',
+    soft: 'rgba(228, 161, 78, 0.16)',
+    glow: 'rgba(228, 161, 78, 0.22)'
   },
   {
     key: 'happy',
     label: '开心',
-    mark: '开',
+    mark: '乐',
     brief: '状态轻松',
     summary: '整体情绪比较积极，现在适合互动、奖励，或者安排一点轻松活动。',
-    accent: '#58b57d',
-    soft: 'rgba(88, 181, 125, 0.16)',
-    glow: 'rgba(88, 181, 125, 0.2)'
+    accent: '#5da974',
+    soft: 'rgba(93, 169, 116, 0.16)',
+    glow: 'rgba(93, 169, 116, 0.22)'
   },
   {
     key: 'lonely',
     label: '孤独',
-    mark: '孤',
+    mark: '陪',
     brief: '等待回应',
-    summary: '它更像是在等陪伴或反馈，可以适当增加互动频率，让环境多一点回应感。',
-    accent: '#6e95d8',
-    soft: 'rgba(110, 149, 216, 0.16)',
-    glow: 'rgba(110, 149, 216, 0.22)'
+    summary: '它更像是在等待陪伴或反馈，可以适当增加互动频率，让环境多一点回应感。',
+    accent: '#6d9fc1',
+    soft: 'rgba(109, 159, 193, 0.16)',
+    glow: 'rgba(109, 159, 193, 0.22)'
   },
   {
     key: 'sad',
     label: '难过',
-    mark: '难',
+    mark: '抱',
     brief: '情绪偏低',
     summary: '现在更适合安静观察，减少刺激，再结合休息和食欲一起判断状态变化。',
-    accent: '#8a7fb3',
-    soft: 'rgba(138, 127, 179, 0.16)',
-    glow: 'rgba(138, 127, 179, 0.22)'
+    accent: '#8e82af',
+    soft: 'rgba(142, 130, 175, 0.16)',
+    glow: 'rgba(142, 130, 175, 0.22)'
   }
 ]
 
 const fallbackMood = {
   key: 'unknown',
   label: '',
-  mark: '--',
-  brief: '暂无情绪数据',
-  summary: '当前还没有可用的真实情绪返回，页面会在收到真实结果后再更新。',
-  accent: '#7d8a99',
-  soft: 'rgba(125, 138, 153, 0.14)',
-  glow: 'rgba(125, 138, 153, 0.2)'
+  mark: '等',
+  brief: '等待情绪同步',
+  summary: '还没有收到稳定的情绪结果。页面会在拿到真实数据后自动更新，你也可以稍后再回来看看。',
+  accent: '#7d8a78',
+  soft: 'rgba(125, 138, 120, 0.14)',
+  glow: 'rgba(125, 138, 120, 0.2)'
 }
 
 const moodMetaMap = new Map(emotionCatalog.map((item) => [item.label, item]))
@@ -79,7 +82,7 @@ const currentMood = computed(() =>
   typeof emotion.value.currentMood === 'string' ? emotion.value.currentMood.trim() : ''
 )
 const hasMoodData = computed(() => Boolean(currentMood.value))
-const currentMoodDisplay = computed(() => currentMood.value || '等待同步')
+const currentMoodDisplay = computed(() => currentMood.value || '正在倾听它的情绪')
 const currentMoodMeta = computed(() => moodMetaMap.get(currentMood.value) || fallbackMood)
 const createdAtText = computed(() => formatTime(emotion.value.createdAt))
 const heroSummary = computed(() =>
@@ -124,6 +127,7 @@ function formatTime(value) {
     <section class="emotion-card" :style="heroTheme">
       <div class="card-top">
         <span class="card-kicker">情绪状态</span>
+        <span class="sync-chip">{{ createdAtText !== '--' ? '已更新' : '等待同步' }}</span>
       </div>
 
       <div class="hero-layout">
@@ -134,13 +138,13 @@ function formatTime(value) {
         </div>
 
         <div class="hero-badge" aria-hidden="true">
+          <img class="pet-avatar-photo" :src="petPhotoUrl" alt="Lucky 的金毛头像" />
           <div class="hero-badge-core">{{ currentMoodMeta.mark }}</div>
         </div>
       </div>
 
       <div class="card-foot">
         <span v-if="createdAtText !== '--'" class="meta-chip">更新于 {{ createdAtText }}</span>
-        <span v-if="historyBadges.length" class="meta-chip">已返回摘要</span>
       </div>
 
       <div class="state-strip">
@@ -160,13 +164,13 @@ function formatTime(value) {
       </div>
     </section>
 
-    <section v-if="historyBadges.length" class="summary-card">
+    <section class="summary-card">
       <div class="summary-head">
-        <span class="card-kicker">补充摘要</span>
-        <h2>当前返回内容</h2>
+        <span class="card-kicker">陪伴建议</span>
+        <h2>{{ historyBadges.length ? '当前返回内容' : '温柔等待' }}</h2>
       </div>
 
-      <div class="summary-grid">
+      <div v-if="historyBadges.length" class="summary-grid">
         <div
           v-for="(item, index) in historyBadges"
           :key="`${item.label}-${index}`"
@@ -176,6 +180,10 @@ function formatTime(value) {
           <strong>{{ item.value }}</strong>
         </div>
       </div>
+
+      <p v-else class="empty-copy">
+        情绪模型还在等待新的声音或行为信号。你可以保持环境安静，稍后再查看最新判断。
+      </p>
     </section>
   </main>
 </template>
