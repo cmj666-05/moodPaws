@@ -22,8 +22,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class LanDiscoveryPlugin extends Plugin {
 
     private static final String DEFAULT_SERVICE_TYPE = "_http._tcp.";
-    private static final String DEFAULT_SERVICE_NAME_PREFIX = "moodpaws-server";
-    private static final String DEFAULT_HEALTH_PATH = "/api/health";
     private static final int DEFAULT_TIMEOUT_MS = 3500;
     private static final int DEFAULT_MAX_RESULTS = 6;
     private static final int MIN_TIMEOUT_MS = 1000;
@@ -31,16 +29,11 @@ public class LanDiscoveryPlugin extends Plugin {
     private static final int MAX_RESULT_LIMIT = 20;
 
     @PluginMethod
-    public void discoverBackend(PluginCall call) {
-        startDiscovery(call, DEFAULT_SERVICE_NAME_PREFIX);
-    }
-
-    @PluginMethod
     public void discoverService(PluginCall call) {
-        startDiscovery(call, "");
+        startDiscovery(call);
     }
 
-    private void startDiscovery(PluginCall call, String defaultServiceNamePrefix) {
+    private void startDiscovery(PluginCall call) {
         Context context = getContext();
         NsdManager nsdManager = (NsdManager) context.getSystemService(Context.NSD_SERVICE);
 
@@ -50,7 +43,7 @@ public class LanDiscoveryPlugin extends Plugin {
         }
 
         String serviceType = normalizeServiceType(call.getString("serviceType", DEFAULT_SERVICE_TYPE));
-        String serviceNamePrefix = normalizeServiceNamePrefix(call.getString("serviceNamePrefix", defaultServiceNamePrefix));
+        String serviceNamePrefix = normalizeServiceNamePrefix(call.getString("serviceNamePrefix", ""));
         int timeoutMs = clamp(call.getInt("timeoutMs", DEFAULT_TIMEOUT_MS), MIN_TIMEOUT_MS, MAX_TIMEOUT_MS);
         int maxResults = clamp(call.getInt("maxResults", DEFAULT_MAX_RESULTS), 1, MAX_RESULT_LIMIT);
 
@@ -229,7 +222,7 @@ public class LanDiscoveryPlugin extends Plugin {
             String hostLabel = safeTrim(serviceInfo.getHost().getHostName());
             int port = serviceInfo.getPort();
             String formattedHost = formatHostForUrl(hostAddress);
-            String healthPath = DEFAULT_HEALTH_PATH;
+            String servicePath = "";
             JSObject attributes = new JSObject();
 
             for (Map.Entry<String, byte[]> entry : serviceInfo.getAttributes().entrySet()) {
@@ -240,13 +233,9 @@ public class LanDiscoveryPlugin extends Plugin {
                 attributes.put(key, value);
 
                 if ("path".equalsIgnoreCase(key) && !value.isEmpty()) {
-                    healthPath = normalizePath(value);
+                    servicePath = normalizePath(value);
                 }
             }
-
-            String apiBasePath = deriveApiBasePath(healthPath);
-            String baseUrl = "http://" + formattedHost + ":" + port + apiBasePath;
-            String healthUrl = "http://" + formattedHost + ":" + port + healthPath;
 
             return new JSObject()
                 .put("key", hostAddress + ":" + port)
@@ -256,27 +245,16 @@ public class LanDiscoveryPlugin extends Plugin {
                 .put("hostName", hostLabel)
                 .put("port", port)
                 .put("originUrl", "http://" + formattedHost + ":" + port)
-                .put("path", healthPath)
-                .put("healthPath", healthPath)
-                .put("apiBasePath", apiBasePath)
-                .put("baseUrl", baseUrl)
-                .put("healthUrl", healthUrl)
+                .put("path", servicePath)
                 .put("attributes", attributes);
         }
 
         private static String normalizePath(String path) {
             String normalized = safeTrim(path);
             if (normalized.isEmpty()) {
-                return DEFAULT_HEALTH_PATH;
+                return "";
             }
             return normalized.startsWith("/") ? normalized : "/" + normalized;
-        }
-
-        private static String deriveApiBasePath(String healthPath) {
-            if (healthPath.endsWith("/health")) {
-                return healthPath.substring(0, healthPath.length() - "/health".length());
-            }
-            return "/api";
         }
 
         private static String formatHostForUrl(@NonNull String host) {

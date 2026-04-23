@@ -1,42 +1,18 @@
-import crypto from 'node:crypto'
 import mqtt from 'mqtt'
+import dotenv from 'dotenv'
 
-const mode = process.argv[2] || 'web-wss'
-const host = 'iot-06z00b1eo2alugk.mqtt.iothub.aliyuncs.com'
+dotenv.config()
+
+const mode = process.argv[2] || 'env'
 const timeoutMs = 60_000
 
-const testWebDevice = {
-  productKey: 'k1wxaEnEO8L',
-  deviceName: 'petInfo',
-  deviceSecret: '53e62471edfbf70c7b225dd260ca7d4e'
-}
-
-const legacyDevice = {
-  productKey: 'k1wxakcs6OI',
-  deviceName: 'DHT11',
-  clientId:
-    'k1wxakcs6OI.DHT11|securemode=2,signmethod=hmacsha256,timestamp=1773712773834|',
-  username: 'DHT11&k1wxakcs6OI',
-  password:
-    'f2c31edbf1045e2cf0f49e67765840a2e90fd6e63ed7608056aba6933178be92'
-}
-
 const presets = {
-  'web-wss': createWebPreset(),
-  'legacy-device-tcp': {
-    url: `mqtt://${host}:1883`,
-    clientId: legacyDevice.clientId,
-    username: legacyDevice.username,
-    password: legacyDevice.password,
-    topic: `/sys/${legacyDevice.productKey}/${legacyDevice.deviceName}/thing/event/property/post`,
-    description:
-      'Use the legacy DHT11 device credential over raw MQTT/TCP for comparison.'
-  }
+  env: createEnvPreset()
 }
 
 if (!presets[mode]) {
   console.error(`Unknown mode: ${mode}`)
-  console.error('Supported modes: web-wss, legacy-device-tcp')
+  console.error('Supported modes: env')
   process.exit(1)
 }
 
@@ -46,6 +22,9 @@ console.log(`Mode: ${mode}`)
 console.log(config.description)
 console.log(`Broker: ${config.url}`)
 console.log(`Topic: ${config.topic}`)
+console.log(`Client ID: ${config.clientId}`)
+console.log(`Username: ${config.username}`)
+console.log(`Password: ${maskSecret(config.password)}`)
 
 const client = mqtt.connect(config.url, {
   clientId: config.clientId,
@@ -95,18 +74,13 @@ client.on('message', (topic, payload) => {
     const summary = {
       sourceDeviceName: parsed.deviceName ?? null,
       requestId: parsed.requestId ?? null,
-      temp: items['PetHouse:Temp']?.value ?? null,
-      humi: items['PetHouse:Humi']?.value ?? null,
-      co2: items['PetHouse:CO2']?.value ?? null,
-      ch2o: items['PetHouse:CH2O']?.value ?? null,
-      voc: items['PetHouse:VOC']?.value ?? null,
-      mq135: items['PetHouse:MQ135']?.value ?? null,
-      weight: items['PetHouse:Weight']?.value ?? null,
-      x: items['Collar:XYZ']?.value?.X ?? null,
-      y: items['Collar:XYZ']?.value?.Y ?? null,
-      z: items['Collar:XYZ']?.value?.Z ?? null,
-      heartRate: items['Collar:XKXY']?.value?.HeartRate ?? null,
-      spo2: items['Collar:XKXY']?.value?.SPO2 ?? null,
+      emotionState: items.EmotionState?.value ?? null,
+      collarTemp: items['Collar:temp']?.value ?? null,
+      x: items['Collar:BNO085']?.value?.X ?? null,
+      y: items['Collar:BNO085']?.value?.Y ?? null,
+      z: items['Collar:BNO085']?.value?.Z ?? null,
+      heartRate: items['Collar:MAX30102']?.value?.HeartRate ?? null,
+      spo2: items['Collar:MAX30102']?.value?.SPO2 ?? null,
       longitude: items['Collar:GPS']?.value?.Longitude ?? null,
       latitude: items['Collar:GPS']?.value?.Latitude ?? null
     }
@@ -120,30 +94,48 @@ client.on('message', (topic, payload) => {
   shutdown(0)
 })
 
+client.on('packetreceive', (packet) => {
+  if (packet?.cmd === 'connack') {
+    console.log('CONNACK:', JSON.stringify({
+      returnCode: packet.returnCode,
+      reasonCode: packet.reasonCode,
+      sessionPresent: packet.sessionPresent
+    }))
+  }
+
+  if (packet?.cmd === 'suback') {
+    console.log('SUBACK:', JSON.stringify({
+      messageId: packet.messageId,
+      granted: packet.granted,
+      reasonCodes: packet.reasonCodes
+    }))
+  }
+})
+
 client.on('error', (error) => {
   clearTimeout(timeout)
   console.error('MQTT error:', error.message)
   shutdown(1)
 })
 
-function createWebPreset() {
-  const rawClientId = `${testWebDevice.productKey}.${testWebDevice.deviceName}`
-  const signContent =
-    `clientId${rawClientId}` +
-    `deviceName${testWebDevice.deviceName}` +
-    `productKey${testWebDevice.productKey}`
-  const password = crypto
-    .createHmac('sha256', testWebDevice.deviceSecret)
-    .update(signContent)
-    .digest('hex')
+function createEnvPreset() {
+  const topic = (process.env.MQTT_TOPICS || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)[0]
 
   return {
-    url: `wss://${host}:443/mqtt`,
-    clientId: `${rawClientId}|securemode=2,signmethod=hmacsha256|`,
-    username: `${testWebDevice.deviceName}&${testWebDevice.productKey}`,
-    password,
-    topic: `/${testWebDevice.productKey}/${testWebDevice.deviceName}/user/get`,
-    description:
-      'Use the petInfo test web device over MQTT/WebSocket Secure and subscribe to the forwarded custom topic.'
+    url: process.env.MQTT_BROKER_URL || '',
+    clientId: process.env.MQTT_CLIENT_ID || '',
+    username: process.env.MQTT_USERNAME || '',
+    password: process.env.MQTT_PASSWORD || '',
+    topic,
+    description: 'Use the MQTT connection settings from .env.'
   }
+}
+
+function maskSecret(secret) {
+  if (!secret) return ''
+  if (secret.length <= 8) return '*'.repeat(secret.length)
+  return `${secret.slice(0, 4)}***${secret.slice(-4)}`
 }

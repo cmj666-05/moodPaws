@@ -2,11 +2,9 @@
 import { Capacitor } from '@capacitor/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { amapConfig } from '../../config/amap'
+import locationTargetIcon from '../../assets/location-target-icon.svg'
 import { usePetApi } from '../../composables/usePetApi'
 import { loadAmap } from '../../services/amap/loader'
-
-const petPhotoUrl =
-  'https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=240&q=80'
 
 let echartsRuntimePromise = null
 
@@ -81,10 +79,13 @@ const mapContainer = ref(null)
 const mapSectionEl = ref(null)
 const mapError = ref('')
 const isMapSectionVisible = ref(false)
+const isLocatingCurrentPosition = ref(false)
 const hrChartEl = ref(null)
 const hrHistory = ref([])
 
 const HR_MAX_POINTS = 30
+const LOCATION_FOCUS_ZOOM = 17
+const POSITION_EQUAL_TOLERANCE = 0.000002
 
 let map = null
 let marker = null
@@ -105,7 +106,17 @@ const heartRateValue = computed(() => heartRate.value?.value ?? hrHistory.value[
 const spo2Value = computed(() => spo2.value?.value)
 const weightValue = computed(() => weight.value?.value)
 
-const petMood = computed(() => emotion.value.currentMood || '开心')
+const sourceDeviceName = computed(() => {
+  const deviceName = latestTelemetry.value.source?.deviceName
+  return deviceName && deviceName !== '--' ? deviceName : ''
+})
+const deviceDisplayName = computed(() => sourceDeviceName.value || '等待设备同步')
+const deviceDescription = computed(() =>
+  sourceDeviceName.value
+    ? `${sourceDeviceName.value} · ${platformText.value}`
+    : `暂无设备数据 · ${platformText.value}`
+)
+const petMood = computed(() => emotion.value.currentMood || '待识别')
 const stepCount = computed(() => Number(latestTelemetry.value?.stepCount) || 0)
 const latestTelemetryAt = computed(() =>
   Number(latestTelemetry.value?.lastActiveAt || latestTelemetry.value?.receivedAt) || 0
@@ -217,11 +228,49 @@ function getCurrentPosition() {
   return [Number(longitude.value.value), Number(latitude.value.value)]
 }
 
+function buildCurrentLocationMarkerContent() {
+  return `
+    <div
+      style="
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        background: #ffffff;
+        border: 2px solid #d85745;
+        box-shadow: 0 0 0 3px rgba(216, 87, 69, 0.18), 0 6px 14px rgba(95, 76, 55, 0.16);
+      "
+    ></div>
+  `
+}
+
+function isSamePosition(firstPosition, secondPosition) {
+  if (!Array.isArray(firstPosition) || !Array.isArray(secondPosition)) return false
+
+  return (
+    Math.abs(Number(firstPosition[0]) - Number(secondPosition[0])) <= POSITION_EQUAL_TOLERANCE &&
+    Math.abs(Number(firstPosition[1]) - Number(secondPosition[1])) <= POSITION_EQUAL_TOLERANCE
+  )
+}
+
+function centerMapOnPosition(position, zoom = LOCATION_FOCUS_ZOOM) {
+  if (!map || !position) return
+
+  marker?.setPosition(position)
+  map.setZoomAndCenter(zoom, position)
+}
+
 function getTrackPath() {
+  const trackedPath = locationTrack.value
+    .map((point) => [Number(point.longitude), Number(point.latitude)])
+    .filter(([lng, lat]) => isValidCoordinatePair(lng, lat))
   if (locationTrack.value.length) {
-    return locationTrack.value
-      .map((point) => [Number(point.longitude), Number(point.latitude)])
-      .filter(([lng, lat]) => isValidCoordinatePair(lng, lat))
+    const current = getCurrentPosition()
+
+    if (!current) {
+      return trackedPath
+    }
+
+    return isSamePosition(trackedPath.at(-1), current) ? trackedPath : [...trackedPath, current]
   }
 
   const current = getCurrentPosition()
@@ -259,18 +308,22 @@ async function setupMap() {
     try {
       const AMap = await loadAmap()
       if (!mapContainer.value || map) return
+      const initialCenter = getCurrentPosition() || amapConfig.defaultCenter
 
       map = new AMap.Map(mapContainer.value, {
         zoom: amapConfig.defaultZoom,
-        center: amapConfig.defaultCenter,
+        center: initialCenter,
         viewMode: '2D',
         resizeEnable: true
       })
 
       marker = new AMap.Marker({
-        position: amapConfig.defaultCenter,
-        offset: new AMap.Pixel(-13, -30),
-        title: 'Collar GPS'
+        position: initialCenter,
+        anchor: 'center',
+        offset: new AMap.Pixel(0, 0),
+        content: buildCurrentLocationMarkerContent(),
+        title: '当前位置',
+        zIndex: 120
       })
 
       polyline = new AMap.Polyline({
@@ -278,11 +331,12 @@ async function setupMap() {
         strokeWeight: 4,
         strokeOpacity: 0.88,
         lineJoin: 'round',
-        lineCap: 'round'
+        lineCap: 'round',
+        zIndex: 80
       })
 
-      map.add(marker)
       map.add(polyline)
+      map.add(marker)
       updateTrack()
       mapError.value = ''
     } catch (error) {
@@ -294,6 +348,32 @@ async function setupMap() {
     })
 
   return mapSetupPromise
+}
+
+async function handleLocateCurrentPosition() {
+  if (isLocatingCurrentPosition.value) return
+
+  isLocatingCurrentPosition.value = true
+  mapError.value = ''
+
+  try {
+    await refreshTelemetryBundle({ force: true, includeHistory: false, includeTrack: true })
+    isMapSectionVisible.value = true
+    await nextTick()
+    await setupMap()
+
+    const current = getCurrentPosition()
+    if (!current) {
+      throw new Error('当前位置暂不可用')
+    }
+
+    updateTrack()
+    centerMapOnPosition(current)
+  } catch (error) {
+    mapError.value = error instanceof Error ? error.message : '定位失败'
+  } finally {
+    isLocatingCurrentPosition.value = false
+  }
 }
 
 function observeMapSection() {
@@ -402,14 +482,14 @@ onBeforeUnmount(() => {
   <main class="collar-page">
     <section class="hero-card">
       <div class="hero-main">
-        <div class="avatar" aria-label="Lucky 的金毛头像">
-          <img class="pet-avatar-photo" :src="petPhotoUrl" alt="Lucky 的金毛头像" />
+        <div class="avatar" aria-label="项圈设备">
+          <span class="avatar-mark">项</span>
         </div>
 
         <div class="hero-copy">
           <span class="hero-kicker">项圈监测</span>
-          <h1>Lucky</h1>
-          <p>金毛寻回犬 · 3 岁 · {{ platformText }}</p>
+          <h1>{{ deviceDisplayName }}</h1>
+          <p>{{ deviceDescription }}</p>
         </div>
 
         <button
@@ -433,7 +513,7 @@ onBeforeUnmount(() => {
 
     <div v-if="errorMessage" class="error-bar">
       <span>{{ errorMessage }}</span>
-      <button type="button" class="error-bar-action" @click="openServerSettings">服务器</button>
+      <button type="button" class="error-bar-action" @click="openServerSettings">设置</button>
     </div>
 
     <section class="section-block health-section">
@@ -496,11 +576,19 @@ onBeforeUnmount(() => {
     </section>
 
     <section class="section-block location-section">
-      <div class="section-heading">
-        <div>
-          <span class="section-kicker">LOCATION</span>
-          <h2>位置轨迹</h2>
-        </div>
+      <div class="section-heading location-heading">
+        <h2>位置轨迹</h2>
+        <button
+          type="button"
+          class="map-locate-button"
+          :class="{ 'is-loading': isLocatingCurrentPosition }"
+          :disabled="isLocatingCurrentPosition"
+          :aria-label="isLocatingCurrentPosition ? '正在定位当前位置' : '定位到当前位置'"
+          :title="isLocatingCurrentPosition ? '正在定位当前位置' : '定位到当前位置'"
+          @click="handleLocateCurrentPosition"
+        >
+          <img class="map-locate-icon" :src="locationTargetIcon" alt="" aria-hidden="true" />
+        </button>
       </div>
 
       <article ref="mapSectionEl" class="map-card">
@@ -523,10 +611,6 @@ onBeforeUnmount(() => {
           <div class="map-meta-item">
             <span>纬度</span>
             <strong>{{ latitude?.value ?? '待更新' }}</strong>
-          </div>
-          <div class="map-meta-item">
-            <span>定位</span>
-            <strong>{{ locationStatusText }}</strong>
           </div>
         </div>
       </article>

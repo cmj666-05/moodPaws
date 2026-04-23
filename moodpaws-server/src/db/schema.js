@@ -1,5 +1,6 @@
 import { env } from '../config/env.js'
 import { all, exec, get, run } from './sqlite.js'
+import { parsePayloadObject } from '../mqtt/parser.js'
 
 export async function initSchema() {
   if (env.dataMode !== 'sqlite') {
@@ -42,6 +43,7 @@ export async function initSchema() {
   await backfillMessageColumns()
   await backfillMetricItemKeys()
   await removeSeededDemoRows()
+  await rebuildMetricPointsFromPayloads()
   await clearMockEmotionSnapshots()
 }
 
@@ -92,9 +94,11 @@ async function backfillMessageColumns() {
 }
 
 async function backfillMetricItemKeys() {
-  await run(`UPDATE metric_points SET item_key = 'Collar:XYZ' WHERE item_key IS NULL AND metric_key IN ('X', 'Y', 'Z')`)
-  await run(`UPDATE metric_points SET item_key = 'Collar:GPS' WHERE item_key IS NULL AND metric_key IN ('Longitude', 'Latitude')`)
-  await run(`UPDATE metric_points SET item_key = 'Collar:XKXY' WHERE item_key IS NULL AND metric_key IN ('HeartRate', 'SPO2')`)
+  await run(`UPDATE metric_points SET item_key = 'Collar:BNO085' WHERE item_key IS NULL AND metric_key IN ('Collar:BNO085.X', 'Collar:BNO085.Y', 'Collar:BNO085.Z')`)
+  await run(`UPDATE metric_points SET item_key = 'Collar:GPS' WHERE item_key IS NULL AND metric_key IN ('Collar:GPS.Longitude', 'Collar:GPS.Latitude')`)
+  await run(`UPDATE metric_points SET item_key = 'Collar:MAX30102' WHERE item_key IS NULL AND metric_key IN ('Collar:MAX30102.HeartRate', 'Collar:MAX30102.SPO2')`)
+  await run(`UPDATE metric_points SET item_key = 'EmotionState' WHERE item_key IS NULL AND metric_key = 'EmotionState'`)
+  await run(`UPDATE metric_points SET item_key = 'Collar:temp' WHERE item_key IS NULL AND metric_key = 'Collar:temp'`)
   await run(`UPDATE metric_points SET item_key = metric_key WHERE item_key IS NULL`)
 }
 
@@ -103,6 +107,44 @@ async function removeSeededDemoRows() {
     DELETE FROM mqtt_messages
     WHERE request_id LIKE 'collar-%'
        OR request_id LIKE 'doghouse-%'
+  `)
+}
+
+async function rebuildMetricPointsFromPayloads() {
+  const rows = await all(`
+    SELECT id, topic, payload_json
+    FROM mqtt_messages
+  `)
+
+  for (const row of rows) {
+    let parsed = null
+    try {
+      parsed = parsePayloadObject(JSON.parse(row.payload_json), row.topic)
+    } catch {
+      parsed = null
+    }
+
+    await run(`DELETE FROM metric_points WHERE message_id = ?`, [row.id])
+
+    if (!parsed?.metricPoints?.length) {
+      continue
+    }
+
+    for (const point of parsed.metricPoints) {
+      await run(
+        `INSERT INTO metric_points (message_id, metric_key, item_key, value_num, value_text, ts)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [row.id, point.metricKey, point.itemKey ?? null, point.valueNum, point.valueText, point.ts]
+      )
+    }
+  }
+
+  await run(`
+    DELETE FROM metric_points
+    WHERE message_id NOT IN (
+      SELECT id
+      FROM mqtt_messages
+    )
   `)
 }
 

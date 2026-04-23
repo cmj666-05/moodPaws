@@ -212,9 +212,9 @@ export function listTrackPoints(limit, sinceTs) {
     const state = getMemoryState()
     const messageMap = new Map(state.metricPoints.map((row) => [`${row.message_id}:${row.metric_key}`, row]))
     const rows = [...state.metricPoints]
-      .filter((row) => row.metric_key === 'Longitude' && row.value_num !== null && row.ts >= sinceTs)
+      .filter((row) => row.metric_key === 'Collar:GPS.Longitude' && row.value_num !== null && row.ts >= sinceTs)
       .map((longitude) => {
-        const latitude = messageMap.get(`${longitude.message_id}:Latitude`)
+        const latitude = messageMap.get(`${longitude.message_id}:Collar:GPS.Latitude`)
         return latitude?.value_num == null
           ? null
           : { longitude: longitude.value_num, latitude: latitude.value_num, ts: longitude.ts }
@@ -230,8 +230,8 @@ export function listTrackPoints(limit, sinceTs) {
      FROM metric_points AS longitude
      JOIN metric_points AS latitude
        ON latitude.message_id = longitude.message_id
-      AND latitude.metric_key = 'Latitude'
-     WHERE longitude.metric_key = 'Longitude'
+      AND latitude.metric_key = 'Collar:GPS.Latitude'
+     WHERE longitude.metric_key = 'Collar:GPS.Longitude'
        AND longitude.value_num IS NOT NULL
        AND latitude.value_num IS NOT NULL
        AND longitude.value_num BETWEEN -180 AND 180
@@ -248,10 +248,10 @@ export function listRecentMotionSamples(limit) {
     const state = getMemoryState()
     const messageMap = new Map(state.metricPoints.map((row) => [`${row.message_id}:${row.metric_key}`, row]))
     const rows = [...state.metricPoints]
-      .filter((row) => row.metric_key === 'X' && row.value_num !== null)
+      .filter((row) => row.metric_key === 'Collar:BNO085.X' && row.value_num !== null)
       .map((x) => {
-        const y = messageMap.get(`${x.message_id}:Y`)
-        const z = messageMap.get(`${x.message_id}:Z`)
+        const y = messageMap.get(`${x.message_id}:Collar:BNO085.Y`)
+        const z = messageMap.get(`${x.message_id}:Collar:BNO085.Z`)
         if (y?.value_num == null || z?.value_num == null) {
           return null
         }
@@ -268,11 +268,11 @@ export function listRecentMotionSamples(limit) {
      FROM metric_points AS x
      JOIN metric_points AS y
        ON y.message_id = x.message_id
-      AND y.metric_key = 'Y'
+      AND y.metric_key = 'Collar:BNO085.Y'
      JOIN metric_points AS z
        ON z.message_id = x.message_id
-      AND z.metric_key = 'Z'
-     WHERE x.metric_key = 'X'
+      AND z.metric_key = 'Collar:BNO085.Z'
+     WHERE x.metric_key = 'Collar:BNO085.X'
        AND x.value_num IS NOT NULL
        AND y.value_num IS NOT NULL
        AND z.value_num IS NOT NULL

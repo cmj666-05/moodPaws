@@ -1,5 +1,10 @@
 {
   "appId": "com.moodpaws.app",
   "appName": "moodPaws",
-  "webDir": "dist"
+  "webDir": "dist",
+  "plugins": {
+    "CapacitorSQLite": {
+      "androidIsEncryption": false
+    }
+  }
 }

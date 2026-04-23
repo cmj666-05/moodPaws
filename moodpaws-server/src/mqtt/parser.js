@@ -2,55 +2,44 @@ import { getMoodLabel } from '../utils/emotion-mood.js'
 
 const metricSections = [
   {
-    key: 'pet-house',
-    title: 'PetHouse',
+    key: 'dog-house',
+    title: 'DogHouse',
     metrics: [
-      { key: 'PetHouse:Temp', label: 'Temperature', unit: 'C' },
-      { key: 'PetHouse:Humi', label: 'Humidity', unit: '%' },
-      { key: 'PetHouse:CO2', label: 'CO2', unit: 'ppm' },
-      { key: 'PetHouse:CH2O', label: 'CH2O', unit: 'ppb' },
-      { key: 'PetHouse:VOC', label: 'VOC', unit: 'lvl' },
-      { key: 'PetHouse:MQ135', label: 'MQ135', unit: 'lvl' },
-      { key: 'PetHouse:Weight', label: 'Weight', unit: 'kg' },
-      { key: 'PetHouse:Mood', label: 'Mood', unit: '' }
+      { key: 'EmotionState', label: 'Emotion State', unit: '' }
+    ]
+  },
+  {
+    key: 'collar-temperature',
+    title: 'Collar Temperature',
+    metrics: [
+      { key: 'Collar:temp', label: 'Collar Temp', unit: 'C' }
     ]
   },
   {
     key: 'collar-motion',
-    title: 'Collar Motion',
+    title: 'Collar BNO085',
     metrics: [
-      { key: 'X', label: 'Axis X', unit: '' },
-      { key: 'Y', label: 'Axis Y', unit: '' },
-      { key: 'Z', label: 'Axis Z', unit: '' }
+      { key: 'Collar:BNO085.X', label: 'Axis X', unit: '' },
+      { key: 'Collar:BNO085.Y', label: 'Axis Y', unit: '' },
+      { key: 'Collar:BNO085.Z', label: 'Axis Z', unit: '' }
     ]
   },
   {
     key: 'collar-health',
-    title: 'Collar Health',
+    title: 'Collar MAX30102',
     metrics: [
-      { key: 'HeartRate', label: 'Heart Rate', unit: 'bpm' },
-      { key: 'SPO2', label: 'SpO2', unit: '%' }
+      { key: 'Collar:MAX30102.HeartRate', label: 'Heart Rate', unit: 'bpm' },
+      { key: 'Collar:MAX30102.SPO2', label: 'SpO2', unit: '%' }
     ]
   },
   {
-    key: 'collar-location',
-    title: 'Collar Location',
+    key: 'collar-gps',
+    title: 'Collar GPS',
     metrics: [
-      { key: 'Longitude', label: 'Longitude', unit: '' },
-      { key: 'Latitude', label: 'Latitude', unit: '' }
+      { key: 'Collar:GPS.Longitude', label: 'Longitude', unit: '' },
+      { key: 'Collar:GPS.Latitude', label: 'Latitude', unit: '' }
     ]
   }
-]
-
-const flatKeys = [
-  'PetHouse:Temp',
-  'PetHouse:Humi',
-  'PetHouse:CO2',
-  'PetHouse:CH2O',
-  'PetHouse:VOC',
-  'PetHouse:MQ135',
-  'PetHouse:Weight',
-  'PetHouse:Mood'
 ]
 
 export function parsePayloadText(payloadText, topic = '') {
@@ -100,37 +89,57 @@ export function parsePayloadObject(payload, topic = '') {
 function extractMetricsFromItems(items) {
   const result = {}
 
-  flatKeys.forEach((key) => {
-    if (items[key]) {
-      const nextMetric = { ...items[key], itemKey: key }
-      if (key === 'PetHouse:Mood') {
-        nextMetric.rawValue = items[key].value
-        nextMetric.value = getMoodLabel(items[key].value) ?? items[key].value
-      }
-      result[key] = nextMetric
-    }
+  addScalarMetric(result, items, 'EmotionState', 'EmotionState', {
+    formatValue: (value) => getMoodLabel(value) ?? value
   })
+  addScalarMetric(result, items, 'Collar:temp', 'Collar:temp')
 
-  const xyz = items['Collar:XYZ']
-  if (xyz?.value) {
-    result.X = { itemKey: 'Collar:XYZ', time: xyz.time, value: xyz.value.X }
-    result.Y = { itemKey: 'Collar:XYZ', time: xyz.time, value: xyz.value.Y }
-    result.Z = { itemKey: 'Collar:XYZ', time: xyz.time, value: xyz.value.Z }
-  }
+  addNestedMetric(result, items, 'Collar:BNO085', 'X', 'Collar:BNO085.X')
+  addNestedMetric(result, items, 'Collar:BNO085', 'Y', 'Collar:BNO085.Y')
+  addNestedMetric(result, items, 'Collar:BNO085', 'Z', 'Collar:BNO085.Z')
 
-  const gps = items['Collar:GPS']
-  if (gps?.value) {
-    result.Longitude = { itemKey: 'Collar:GPS', time: gps.time, value: gps.value.Longitude }
-    result.Latitude = { itemKey: 'Collar:GPS', time: gps.time, value: gps.value.Latitude }
-  }
+  addNestedMetric(result, items, 'Collar:GPS', 'Longitude', 'Collar:GPS.Longitude')
+  addNestedMetric(result, items, 'Collar:GPS', 'Latitude', 'Collar:GPS.Latitude')
 
-  const health = items['Collar:XKXY']
-  if (health?.value) {
-    result.HeartRate = { itemKey: 'Collar:XKXY', time: health.time, value: health.value.HeartRate }
-    result.SPO2 = { itemKey: 'Collar:XKXY', time: health.time, value: health.value.SPO2 }
-  }
+  addNestedMetric(result, items, 'Collar:MAX30102', 'HeartRate', 'Collar:MAX30102.HeartRate')
+  addNestedMetric(result, items, 'Collar:MAX30102', 'SPO2', 'Collar:MAX30102.SPO2')
 
   return result
+}
+
+function addScalarMetric(result, items, itemKey, metricKey, options = {}) {
+  const item = items[itemKey]
+  if (!hasItemValue(item)) {
+    return
+  }
+
+  result[metricKey] = {
+    itemKey,
+    time: item.time,
+    rawValue: item.value,
+    value: options.formatValue ? options.formatValue(item.value) : item.value
+  }
+}
+
+function addNestedMetric(result, items, itemKey, fieldName, metricKey) {
+  const item = items[itemKey]
+  if (!hasItemValue(item) || typeof item.value !== 'object') {
+    return
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(item.value, fieldName)) {
+    return
+  }
+
+  result[metricKey] = {
+    itemKey,
+    time: item.time,
+    value: item.value[fieldName]
+  }
+}
+
+function hasItemValue(item) {
+  return Boolean(item) && item.value !== undefined && item.value !== null
 }
 
 function inferDeviceName(payload, topic) {

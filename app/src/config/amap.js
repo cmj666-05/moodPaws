@@ -3,6 +3,6 @@ export const amapConfig = {
   securityJsCode: 'b745740303ff49863110a1fcd9243927',
   androidKey: '38df705c5863e34c8345b45520092c5b',
   version: '2.0',
-  defaultCenter: [121.4737, 31.2304],
-  defaultZoom: 13
+  defaultCenter: [106.595198, 29.421607],
+  defaultZoom: 16
 }

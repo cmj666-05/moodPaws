@@ -73,8 +73,16 @@
   width: 46px;
   height: 46px;
   border-radius: 17px;
-  object-fit: cover;
   border: 3px solid rgba(255, 255, 255, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 32% 18%, rgba(255, 255, 255, 0.9), transparent 30%),
+    linear-gradient(145deg, #ffe7aa 0%, #f7c765 100%);
+  color: #8f5e20;
+  font-size: 18px;
+  font-weight: 900;
   box-shadow: 0 10px 20px rgba(177, 112, 63, 0.16);
 }
 

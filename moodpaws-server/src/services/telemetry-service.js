@@ -17,21 +17,15 @@ const HOUSE_DEVICE = 'DogHouse'
 const TRACK_WINDOW_MS = 24 * 60 * 60 * 1000
 const ONLINE_WINDOW_MS = 60 * 1000
 const TELEMETRY_METRIC_KEYS = [
-  'HeartRate',
-  'SPO2',
-  'Longitude',
-  'Latitude',
-  'X',
-  'Y',
-  'Z',
-  'PetHouse:Temp',
-  'PetHouse:Humi',
-  'PetHouse:CO2',
-  'PetHouse:CH2O',
-  'PetHouse:VOC',
-  'PetHouse:MQ135',
-  'PetHouse:Weight',
-  'PetHouse:Mood'
+  'EmotionState',
+  'Collar:temp',
+  'Collar:GPS.Longitude',
+  'Collar:GPS.Latitude',
+  'Collar:BNO085.X',
+  'Collar:BNO085.Y',
+  'Collar:BNO085.Z',
+  'Collar:MAX30102.HeartRate',
+  'Collar:MAX30102.SPO2'
 ]
 
 const isValidTrackPoint = (longitude, latitude) =>
@@ -129,13 +123,15 @@ export async function getLocationTrack(limit = 1440) {
 }
 
 export async function getLatestEmotion() {
-  const [latestHouseMessage, latestMessage] = await Promise.all([
+  const [latestHouseMessage, latestMessage, latestMoodRows] = await Promise.all([
     getLatestMessageByDeviceName(HOUSE_DEVICE),
-    getLatestMessage()
+    getLatestMessage(),
+    listLatestMetricPoints(['EmotionState'])
   ])
   const moodMetric =
-    extractLatestMoodMetric(latestHouseMessage) ||
-    extractLatestMoodMetric(latestMessage)
+    extractLatestEmotionMetric(latestHouseMessage) ||
+    extractLatestEmotionMetric(latestMessage) ||
+    extractMoodFromMetricPoint(latestMoodRows[0])
   const telemetryMood = moodMetric
     ? getMoodLabel(moodMetric.valueNum ?? moodMetric.rawValue ?? moodMetric.value)
     : null
@@ -170,13 +166,24 @@ function createEmptyEmotionPayload() {
   }
 }
 
-function extractLatestMoodMetric(message) {
+function extractLatestEmotionMetric(message) {
   if (!message?.payload_json) {
     return null
   }
 
   const parsed = parsePayloadObject(JSON.parse(message.payload_json), message.topic)
-  return parsed.metricPoints.find((metric) => metric.metricKey === 'PetHouse:Mood') || null
+  return parsed.metricPoints.find((metric) => metric.metricKey === 'EmotionState') || null
+}
+
+function extractMoodFromMetricPoint(row) {
+  if (!row) {
+    return null
+  }
+
+  return {
+    value: row.value_num ?? row.value_text,
+    ts: row.ts
+  }
 }
 
 function mergeSections(baseSections = [], ...sectionGroups) {

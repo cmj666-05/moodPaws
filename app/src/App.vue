@@ -10,22 +10,19 @@ let preloadTaskId = null
 const tabs = [
   { key: 'collar', label: '项圈' },
   { key: 'house', label: '宠舍' },
-  { key: 'emotion', label: '情绪' },
-  { key: 'social', label: '社交' }
+  { key: 'emotion', label: '情绪' }
 ]
 
 const viewLoaders = {
   collar: () => import('./views/collar/CollarView.vue'),
   house: () => import('./views/dashboard/DashboardView.vue'),
-  emotion: () => import('./views/emotion/EmotionView.vue'),
-  social: () => import('./views/social/SocialView.vue')
+  emotion: () => import('./views/emotion/EmotionView.vue')
 }
 
 const tabViews = {
   collar: defineAsyncComponent(viewLoaders.collar),
   house: defineAsyncComponent(viewLoaders.house),
-  emotion: defineAsyncComponent(viewLoaders.emotion),
-  social: defineAsyncComponent(viewLoaders.social)
+  emotion: defineAsyncComponent(viewLoaders.emotion)
 }
 
 const activeComponent = computed(() => tabViews[activeTab.value] ?? null)
@@ -159,17 +156,12 @@ onBeforeUnmount(() => {
               stroke-width="1.8"
             />
           </svg>
-          <svg v-else class="tab-svg" viewBox="0 0 24 24" fill="none">
-            <circle cx="9" cy="8" r="2.8" stroke="currentColor" stroke-width="1.8" />
-            <path d="M4.5 18.5c.6-2.6 2.6-4.2 5-4.2s4.4 1.6 5 4.2" stroke="currentColor" stroke-linecap="round" stroke-width="1.8" />
-            <path d="M16 9.2c1.6.2 2.8 1.4 3 2.9M16.7 14.6c1.5.4 2.6 1.7 2.8 3.4" stroke="currentColor" stroke-linecap="round" stroke-width="1.8" />
-          </svg>
         </span>
         <span class="tab-text">{{ tab.label }}</span>
       </button>
     </nav>
 
-    <button type="button" class="server-fab" aria-label="服务器设置" @click="openEndpointSheet">
+    <button type="button" class="server-fab" aria-label="连接设置" @click="openEndpointSheet">
       <span class="server-fab-icon">
         <svg viewBox="0 0 24 24" fill="none">
           <rect x="4" y="5" width="16" height="5" rx="1.8" stroke="currentColor" stroke-width="1.7" />
@@ -178,7 +170,7 @@ onBeforeUnmount(() => {
           <circle cx="8" cy="16.5" r="0.9" fill="currentColor" />
         </svg>
       </span>
-      <span class="server-fab-text">服务</span>
+      <span class="server-fab-text">设置</span>
     </button>
 
     <ApiEndpointSheet

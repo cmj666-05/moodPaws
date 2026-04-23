@@ -1,5 +1,11 @@
 import { computed, ref } from 'vue'
-import { apiConfig, fetchApiJson } from '../config/api'
+import { apiConfig } from '../config/api'
+import {
+  loadHeartRateHistory,
+  loadLatestEmotion,
+  loadLatestTelemetry,
+  loadLocationTrack
+} from '../services/pet/pet-data-service'
 
 const loading = ref(false)
 const telemetryLoading = ref(false)
@@ -40,6 +46,7 @@ let lastTelemetryRefreshAt = 0
 let lastEmotionRefreshAt = 0
 let lastTelemetryDetailsRefreshAt = 0
 const REFRESH_DEDUP_MS = 3000
+const MAX_TRACK_POINTS = 48
 const DETAILS_REFRESH_INTERVAL_MS = Number(
   import.meta.env.VITE_API_DETAILS_POLL_INTERVAL || Math.max(apiConfig.pollInterval * 6, 30000)
 )
@@ -58,14 +65,16 @@ export function usePetApi() {
   const metricSections = computed(() => latestTelemetry.value.sections || [])
   const metricMap = computed(() => createMetricMap(metricSections.value))
   const homeMetrics = computed(() => ({
-    heartRate: metricMap.value.HeartRate,
-    spo2: metricMap.value.SPO2,
-    weight: metricMap.value['PetHouse:Weight'],
-    longitude: metricMap.value.Longitude,
-    latitude: metricMap.value.Latitude,
-    motionX: metricMap.value.X,
-    motionY: metricMap.value.Y,
-    motionZ: metricMap.value.Z
+    emotionState: metricMap.value.EmotionState,
+    collarTemp: metricMap.value['Collar:temp'],
+    heartRate: metricMap.value['Collar:MAX30102.HeartRate'],
+    spo2: metricMap.value['Collar:MAX30102.SPO2'],
+    weight: metricMap.value['Collar:Weight'],
+    longitude: metricMap.value['Collar:GPS.Longitude'],
+    latitude: metricMap.value['Collar:GPS.Latitude'],
+    motionX: metricMap.value['Collar:BNO085.X'],
+    motionY: metricMap.value['Collar:BNO085.Y'],
+    motionZ: metricMap.value['Collar:BNO085.Z']
   }))
   const rawPayloadText = computed(() =>
     latestTelemetry.value.raw ? JSON.stringify(latestTelemetry.value.raw, null, 2) : ''
@@ -77,16 +86,12 @@ export function usePetApi() {
     return latestTelemetry.value.sections?.length ? 'Ready' : 'Waiting for data'
   })
 
-  async function fetchJson(path) {
-    return fetchApiJson(path)
-  }
-
   function syncLoadingState() {
     loading.value = telemetryLoading.value || emotionLoading.value
   }
 
-  async function refreshTelemetry() {
-    const data = await fetchJson('/telemetry/latest')
+  async function refreshTelemetry(options = {}) {
+    const data = await loadLatestTelemetry({ force: options.force === true })
     if (data && typeof data === 'object') {
       latestTelemetry.value = {
         source: data.source || latestTelemetry.value.source,
@@ -98,21 +103,23 @@ export function usePetApi() {
         isOnline: data.isOnline ?? latestTelemetry.value.isOnline,
         lastActiveAt: data.lastActiveAt ?? latestTelemetry.value.lastActiveAt
       }
+      appendLatestHeartRatePoint(data)
+      appendLatestLocationPoint(data)
     }
   }
 
-  async function refreshHeartRateHistory() {
-    const payload = await fetchJson('/telemetry/metrics/HeartRate/history?limit=30')
+  async function refreshHeartRateHistory(options = {}) {
+    const payload = await loadHeartRateHistory({ limit: 30, force: options.force === true })
     heartRateHistory.value = payload.points || []
   }
 
-  async function refreshLocationTrack() {
-    const payload = await fetchJson('/telemetry/location/track?limit=1440')
+  async function refreshLocationTrack(options = {}) {
+    const payload = await loadLocationTrack({ limit: MAX_TRACK_POINTS, force: options.force === true })
     locationTrack.value = payload.points || []
   }
 
-  async function refreshEmotion() {
-    const data = await fetchJson('/emotion/latest')
+  async function refreshEmotion(options = {}) {
+    const data = await loadLatestEmotion({ force: options.force === true })
     if (data && typeof data === 'object') {
       emotion.value = {
         source: typeof data.source === 'string' ? data.source : '',
@@ -152,14 +159,14 @@ export function usePetApi() {
     telemetryLoading.value = true
     syncLoadingState()
 
-    const tasks = [refreshTelemetry()]
+    const tasks = [refreshTelemetry({ force })]
 
     if (includeHistory) {
-      tasks.push(refreshHeartRateHistory())
+      tasks.push(refreshHeartRateHistory({ force }))
     }
 
     if (includeTrack) {
-      tasks.push(refreshLocationTrack())
+      tasks.push(refreshLocationTrack({ force }))
     }
 
     telemetryRefreshPromise = Promise.all(tasks)
@@ -188,11 +195,11 @@ export function usePetApi() {
     const tasks = []
 
     if (includeHistory) {
-      tasks.push(refreshHeartRateHistory())
+      tasks.push(refreshHeartRateHistory({ force: options.force === true }))
     }
 
     if (includeTrack) {
-      tasks.push(refreshLocationTrack())
+      tasks.push(refreshLocationTrack({ force: options.force === true }))
     }
 
     if (!tasks.length) {
@@ -217,7 +224,7 @@ export function usePetApi() {
 
     emotionLoading.value = true
     syncLoadingState()
-    emotionRefreshPromise = refreshEmotion()
+    emotionRefreshPromise = refreshEmotion({ force })
       .then(() => {
         errorMessage.value = ''
         lastEmotionRefreshAt = Date.now()
@@ -370,6 +377,84 @@ function mergeMetricSections(previousSections = [], nextSections = []) {
           : metric
     })
   }))
+}
+
+function appendLatestHeartRatePoint(telemetry) {
+  const metricMap = createMetricMap(telemetry?.sections || [])
+  const heartRateMetric = metricMap['Collar:MAX30102.HeartRate']
+  const value = Number(heartRateMetric?.value)
+
+  if (!Number.isFinite(value)) {
+    return
+  }
+
+  const time = Number(heartRateMetric?.time || telemetry?.receivedAt || Date.now())
+  const history = heartRateHistory.value || []
+  const lastPoint = history[history.length - 1]
+
+  if (lastPoint && Number(lastPoint.time) >= time) {
+    return
+  }
+
+  heartRateHistory.value = [
+    ...history,
+    {
+      value,
+      time
+    }
+  ].slice(-30)
+}
+
+function appendLatestLocationPoint(telemetry) {
+  const metricMap = createMetricMap(telemetry?.sections || [])
+  const longitudeMetric = metricMap['Collar:GPS.Longitude']
+  const latitudeMetric = metricMap['Collar:GPS.Latitude']
+  const accuracyMetric = metricMap['Collar:GPS.Accuracy']
+  const longitude = Number(longitudeMetric?.value)
+  const latitude = Number(latitudeMetric?.value)
+
+  if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+    return
+  }
+
+  const accuracy = Number(accuracyMetric?.value ?? telemetry?.raw?.gps?.accuracy)
+  const speed = Number(telemetry?.raw?.gps?.speed)
+  const time = Number(
+    longitudeMetric?.time ||
+      latitudeMetric?.time ||
+      accuracyMetric?.time ||
+      telemetry?.receivedAt ||
+      Date.now()
+  )
+  const history = locationTrack.value || []
+  const nextPoint = {
+    longitude,
+    latitude,
+    accuracy: Number.isFinite(accuracy) ? accuracy : null,
+    speed: Number.isFinite(speed) ? speed : null,
+    time
+  }
+  const lastPoint = history[history.length - 1]
+
+  if (lastPoint && Number(lastPoint.time) > time) {
+    return
+  }
+
+  if (lastPoint && isSameCoordinatePoint(lastPoint, nextPoint)) {
+    locationTrack.value = [...history.slice(0, -1), { ...lastPoint, ...nextPoint }]
+    return
+  }
+
+  locationTrack.value = [...history, nextPoint].slice(-MAX_TRACK_POINTS)
+}
+
+function isSameCoordinatePoint(firstPoint, secondPoint) {
+  const tolerance = 0.000002
+
+  return (
+    Math.abs(Number(firstPoint?.longitude) - Number(secondPoint?.longitude)) <= tolerance &&
+    Math.abs(Number(firstPoint?.latitude) - Number(secondPoint?.latitude)) <= tolerance
+  )
 }
 
 function formatTime(value) {

@@ -79,6 +79,14 @@
   font-weight: 700;
 }
 
+.endpoint-sheet-sub-label {
+  margin-top: 14px;
+}
+
+.endpoint-sheet-input-label {
+  margin-top: 6px;
+}
+
 .endpoint-sheet-current {
   display: block;
   font-size: 15px;
@@ -174,6 +182,8 @@
 .endpoint-sheet-reset {
   display: flex;
   justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .endpoint-sheet-text-btn {

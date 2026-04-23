@@ -142,28 +142,16 @@
     0 12px 22px rgba(183, 126, 48, 0.16);
 }
 
-.pet-avatar-photo {
-  width: 100%;
-  height: 100%;
-  border-radius: 26px;
-  object-fit: cover;
-  object-position: center 42%;
-  display: block;
-}
-
 .hero-badge-core {
-  position: absolute;
-  right: -5px;
-  bottom: -5px;
-  width: 28px;
-  height: 28px;
-  border-radius: 11px;
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: linear-gradient(180deg, var(--emotion-accent) 0%, var(--emotion-accent) 100%);
   color: #ffffff;
-  font-size: 13px;
+  font-size: 20px;
   font-weight: 900;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.32),
@@ -183,18 +171,19 @@
   margin-top: 9px;
   display: grid;
   grid-template-columns: 1fr;
+  grid-auto-rows: 60px;
   gap: 8px;
 }
 
 .state-pill {
   min-width: 0;
-  min-height: 48px;
-  padding: 8px;
+  height: 100%;
+  padding: 6px 8px;
   border-radius: 18px;
   border: 1px solid var(--color-divider);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: rgba(255, 253, 248, 0.76);
 }
 
@@ -207,9 +196,9 @@
 }
 
 .state-pill-mark {
-  width: 30px;
-  height: 30px;
-  border-radius: 12px;
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -223,18 +212,24 @@
 .state-pill-text {
   min-width: 0;
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .state-pill-text strong {
   font-size: 14px;
   line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .state-pill-text small {
   color: var(--color-text-secondary);
   font-size: 12px;
-  line-height: 1.3;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .summary-card {
@@ -296,16 +291,6 @@
   .summary-card {
     display: none;
   }
-
-  .state-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 520px) {
-  .state-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 420px) {
@@ -330,10 +315,10 @@
   }
 
   .hero-badge-core {
-    width: 28px;
-    height: 28px;
-    border-radius: 11px;
-    font-size: 13px;
+    width: 44px;
+    height: 44px;
+    border-radius: 16px;
+    font-size: 20px;
   }
 
   .summary-grid {

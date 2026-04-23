@@ -169,16 +169,17 @@ CORS_ORIGIN=*
 
 当前主要指标包括：
 
-- `PetHouse:Temp`
-- `PetHouse:Humi`
-- `PetHouse:CO2`
-- `PetHouse:CH2O`
-- `PetHouse:VOC`
-- `PetHouse:MQ135`
-- `PetHouse:Weight`
-- `PetHouse:Mood`
+- `EmotionState`
+- `Collar:temp`
+- `Collar:GPS.Longitude`
+- `Collar:GPS.Latitude`
+- `Collar:BNO085.X`
+- `Collar:BNO085.Y`
+- `Collar:BNO085.Z`
+- `Collar:MAX30102.HeartRate`
+- `Collar:MAX30102.SPO2`
 
-其中 `PetHouse:Mood` 的枚举含义为：
+其中 `EmotionState` 的枚举含义为：
 
 - `1` -> `angry` -> `生气`
 - `2` -> `anxious` -> `焦虑`
@@ -186,7 +187,7 @@ CORS_ORIGIN=*
 - `4` -> `lonely` -> `孤独`
 - `5` -> `sad` -> `难过`
 
-> 当前标准物模型接入只保证以上 `PetHouse:*` 指标。旧的 `X/Y/Z`、`HeartRate`、`SPO2`、`Longitude`、`Latitude` 不在本次标准 Topic 接入范围内。
+> 当前解析规则以真实设备字段为准，不再兼容旧的 `PetHouse:*`、`Collar:XYZ`、`Collar:XKXY` 指标名。
 
 ### 5.3 emotion_snapshots
 
@@ -215,20 +216,13 @@ CORS_ORIGIN=*
 
 - `/k1wxaEnEO8L/petInfo/user/get`
 
-### 6.1 直接平铺字段
+### 6.1 DogHouse 字段
 
 从 `payload.items` 中直接读取：
 
-- `PetHouse:Temp`
-- `PetHouse:Humi`
-- `PetHouse:CO2`
-- `PetHouse:CH2O`
-- `PetHouse:VOC`
-- `PetHouse:MQ135`
-- `PetHouse:Weight`
-- `PetHouse:Mood`
+- `EmotionState`
 
-其中 `PetHouse:Mood` 当前按以下规则映射并复用于 `/api/emotion/latest`：
+其中 `EmotionState` 当前按以下规则映射并复用于 `/api/emotion/latest`：
 
 - `1` -> `angry` -> `生气`
 - `2` -> `anxious` -> `焦虑`
@@ -236,22 +230,104 @@ CORS_ORIGIN=*
 - `4` -> `lonely` -> `孤独`
 - `5` -> `sad` -> `难过`
 
-### 6.2 项圈扩展字段
+### 6.2 Collar 字段
 
-如果 `petInfo` 聚合消息中包含项圈数据，则继续拆分：
+如果 `petInfo` 聚合消息中包含项圈数据，则继续拆分。当前后端只解析真实设备字段名：
 
-- `Collar:XYZ` -> `X` / `Y` / `Z`
-- `Collar:GPS` -> `Longitude` / `Latitude`
-- `Collar:XKXY` -> `HeartRate` / `SPO2`
+- `Collar:BNO085` -> `Collar:BNO085.X` / `Collar:BNO085.Y` / `Collar:BNO085.Z`
+- `Collar:GPS` -> `Collar:GPS.Longitude` / `Collar:GPS.Latitude`
+- `Collar:MAX30102` -> `Collar:MAX30102.HeartRate` / `Collar:MAX30102.SPO2`
+- `Collar:temp` -> `Collar:temp`
 
-### 6.3 来源设备识别
+### 6.3 真实上报样例
+
+当前解析和入库以以下真实设备 payload 字段为准。
+
+#### DogHouse 情绪上报
+
+```json
+{
+  "deviceType": "CustomCategory",
+  "iotId": "9ptO6My0fuTjW4Q7qiJSk1wxa0",
+  "requestId": "1776790843011",
+  "checkFailedData": {},
+  "productKey": "k1wxaEnEO8L",
+  "gmtCreate": 1776790843407,
+  "deviceName": "DogHouse",
+  "items": {
+    "EmotionState": {
+      "time": 1776790843378,
+      "value": 1
+    }
+  }
+}
+```
+
+入库指标：
+
+- `EmotionState`：情绪枚举值，`1` 会映射为 `生气`
+
+#### Collar 项圈上报
+
+```json
+{
+  "deviceType": "CustomCategory",
+  "iotId": "R5uUcVnhywxOohTc1TtVk1wxa0",
+  "requestId": "1776821035980",
+  "checkFailedData": {},
+  "productKey": "k1wxaEnEO8L",
+  "gmtCreate": 1776821035744,
+  "deviceName": "Collar",
+  "items": {
+    "Collar:GPS": {
+      "value": {
+        "Latitude": 29.402408,
+        "Longitude": 106.540257
+      },
+      "time": 1776821035700
+    },
+    "Collar:BNO085": {
+      "value": {
+        "X": 32,
+        "Y": 21,
+        "Z": 1
+      },
+      "time": 1776821035700
+    },
+    "Collar:MAX30102": {
+      "value": {
+        "HeartRate": 152,
+        "SPO2": 98
+      },
+      "time": 1776821035700
+    },
+    "Collar:temp": {
+      "value": 37,
+      "time": 1776821035700
+    }
+  }
+}
+```
+
+入库指标：
+
+- `Collar:GPS.Longitude`：经度
+- `Collar:GPS.Latitude`：纬度
+- `Collar:BNO085.X`：三轴 X
+- `Collar:BNO085.Y`：三轴 Y
+- `Collar:BNO085.Z`：三轴 Z
+- `Collar:MAX30102.HeartRate`：心率
+- `Collar:MAX30102.SPO2`：血氧
+- `Collar:temp`：项圈温度
+
+### 6.4 来源设备识别
 
 优先使用 payload 中的 `deviceName` 识别真实来源设备，例如：
 
 - `Collar`
 - `DogHouse`
 
-### 6.4 输出结果
+### 6.5 输出结果
 
 解析后会生成两类数据：
 
@@ -327,13 +403,13 @@ CORS_ORIGIN=*
 
 - 给情绪页与项圈页提供统一情绪接口
 
-当前接口采用“telemetry 实时 Mood 优先、emotion snapshot 兜底其余字段”的聚合方式。
+当前接口采用“DogHouse 实时 `EmotionState` 优先、emotion snapshot 兜底其余字段”的聚合方式。
 
 补充说明：
 
-- 当最新 telemetry 中存在 `PetHouse:Mood` 时，`currentMood` 会优先使用实时设备值映射后的中文文案
+- 当最新 telemetry 中存在 `EmotionState` 时，`currentMood` 会优先使用实时设备值映射后的中文文案
 - `score`、`voice`、`fluctuation`、`history` 仍沿用 `emotion_snapshots` 中的快照数据
-- 当 telemetry 暂无 `PetHouse:Mood` 时，接口会回退到原有 snapshot/mock 行为
+- 当 telemetry 暂无 `EmotionState` 时，接口会回退到原有 snapshot/mock 行为
 
 ---
 
@@ -344,7 +420,7 @@ CORS_ORIGIN=*
 1. 服务可正常启动
 2. SQLite 数据库可自动创建
 3. `/api/health` 可正常返回
-4. `/api/emotion/latest` 可在存在 `PetHouse:Mood` telemetry 时优先返回实时情绪，同时保留 snapshot 的分数与摘要字段
+4. `/api/emotion/latest` 可在存在 `EmotionState` telemetry 时优先返回实时情绪，同时保留 snapshot 的分数与摘要字段
 5. `/api/telemetry/latest`、`/api/telemetry/messages` 在无真实 MQTT 消息时可正常返回空结果
 6. 前端 `src/App.vue` 已将 `house` tab 挂接到 `DashboardView`，`social` tab 挂接到 `SocialView`
 7. 前端 `src/views/dashboard/DashboardView.vue`、`src/views/collar/CollarView.vue`、`src/views/emotion/EmotionView.vue` 已改为通过 `src/composables/usePetApi.js` 请求后端 API
@@ -394,7 +470,7 @@ Android 安装包如果直接访问当前服务器 HTTP 接口，已在原生层
 页面接入情况：
 
 - `DashboardView`：当前作为宠舍照护页，聚合环境、看护、生命体征与情绪状态展示
-- `CollarView`：读取 `/api/telemetry/latest`、`/api/telemetry/metrics/HeartRate/history`、`/api/telemetry/location/track`、`/api/emotion/latest`
+- `CollarView`：读取 `/api/telemetry/latest`、`/api/telemetry/metrics/Collar%3AMAX30102.HeartRate/history`、`/api/telemetry/location/track`、`/api/emotion/latest`
 - `EmotionView`：读取 `/api/emotion/latest`
 - `SocialView`：当前作为社交开发中过渡页
 
@@ -413,7 +489,7 @@ Android 安装包如果直接访问当前服务器 HTTP 接口，已在原生层
 优先级建议：
 
 1. `GET /api/telemetry/latest`
-2. `GET /api/telemetry/metrics/HeartRate/history`
+2. `GET /api/telemetry/metrics/Collar%3AMAX30102.HeartRate/history`
 3. `GET /api/telemetry/location/track`
 4. `GET /api/emotion/latest`
 

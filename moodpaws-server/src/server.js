@@ -77,6 +77,24 @@ function logAccessibleAddresses(addresses) {
   }
 }
 
+function listen(app, port) {
+  return new Promise((resolve, reject) => {
+    const server = app.listen(port, '0.0.0.0')
+
+    server.once('listening', () => resolve(server))
+    server.once('error', reject)
+  })
+}
+
+function createPortInUseError(error) {
+  const port = error.port ?? env.port
+  const portError = new Error(
+    `Port ${port} is already in use. Stop the existing process or set another PORT in .env.`
+  )
+  portError.code = 'EADDRINUSE'
+  return portError
+}
+
 async function bootstrap() {
   await initSchema()
 
@@ -87,6 +105,16 @@ async function bootstrap() {
     serviceId: serviceState.serviceId,
     discoveryState: serviceState.discovery
   })
+
+  const server = await listen(app, env.port).catch((error) => {
+    if (error?.code === 'EADDRINUSE') {
+      throw createPortInUseError(error)
+    }
+
+    throw error
+  })
+
+  console.log(`moodpaws-server listening on http://0.0.0.0:${env.port}`)
 
   logMqtt('starting subscriber', {
     brokerUrl: env.mqtt.brokerUrl,
@@ -216,22 +244,18 @@ async function bootstrap() {
 
   mqttState.enabled = subscriber.enabled
 
-  const server = app.listen(env.port, '0.0.0.0', async () => {
-    console.log(`moodpaws-server listening on http://0.0.0.0:${env.port}`)
+  const published = await discovery.start()
+  if (published) {
+    logDiscovery('published mDNS service', discovery.getState())
+  } else if (serviceState.discovery.enabled) {
+    logDiscovery('failed to publish mDNS service', {
+      lastError: serviceState.discovery.lastError
+    })
+  } else {
+    logDiscovery('mDNS disabled')
+  }
 
-    const published = await discovery.start()
-    if (published) {
-      logDiscovery('published mDNS service', discovery.getState())
-    } else if (serviceState.discovery.enabled) {
-      logDiscovery('failed to publish mDNS service', {
-        lastError: serviceState.discovery.lastError
-      })
-    } else {
-      logDiscovery('mDNS disabled')
-    }
-
-    logAccessibleAddresses(getAccessibleAddresses(env.port))
-  })
+  logAccessibleAddresses(getAccessibleAddresses(env.port))
 
   let shuttingDown = false
 
@@ -251,6 +275,11 @@ async function bootstrap() {
 }
 
 bootstrap().catch((error) => {
+  if (error?.code === 'EADDRINUSE') {
+    console.error(`[server] ${error.message}`)
+    process.exit(1)
+  }
+
   console.error('Failed to start moodpaws-server:', error)
   process.exit(1)
 })

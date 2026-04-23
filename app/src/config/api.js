@@ -1,18 +1,9 @@
 import { reactive, readonly } from 'vue'
-import { Capacitor, CapacitorHttp } from '@capacitor/core'
+import { Capacitor } from '@capacitor/core'
 import { LanDiscovery } from '../plugins/lan-discovery'
 
-const API_SUFFIX = '/api'
-const HEALTH_SUFFIX = '/health'
-const DEFAULT_HEALTH_PATH = '/api/health'
 const DEFAULT_SERVICE_TYPE = '_http._tcp.'
-const CACHE_STORAGE_KEY = 'moodpaws.api.baseUrl'
-const MANUAL_STORAGE_KEY = 'moodpaws.api.manualBaseUrl'
-
-const SERVICE_NAME_PREFIX = safeTrim(import.meta.env.VITE_MDNS_SERVICE_NAME || 'moodpaws-server')
-const DISCOVERY_TIMEOUT_MS = Number(import.meta.env.VITE_API_DISCOVERY_TIMEOUT || 3500)
-const HEALTHCHECK_TIMEOUT_MS = 1800
-const REQUEST_TIMEOUT_MS = 5000
+const VIDEO_MANUAL_STORAGE_KEY = 'moodpaws.video.manualStreamUrl'
 
 const VIDEO_STREAM_PORT = Number(import.meta.env.VITE_VIDEO_STREAM_PORT || 5000)
 const VIDEO_STREAM_PATH = normalizeUrlPath(import.meta.env.VITE_VIDEO_STREAM_PATH || '/video_feed')
@@ -21,68 +12,27 @@ const VIDEO_SERVICE_NAME_PREFIX = safeTrim(import.meta.env.VITE_VIDEO_MDNS_SERVI
 const VIDEO_SERVICE_TYPE = normalizeServiceType(
   import.meta.env.VITE_VIDEO_MDNS_SERVICE_TYPE || DEFAULT_SERVICE_TYPE
 )
-const VIDEO_DISCOVERY_TIMEOUT_MS = Number(import.meta.env.VITE_VIDEO_DISCOVERY_TIMEOUT || 2500)
+const VIDEO_DISCOVERY_TIMEOUT_MS = parsePositiveInt(
+  import.meta.env.VITE_VIDEO_DISCOVERY_TIMEOUT,
+  2500
+)
 
-const defaultVideoConfig = {
-  enabled: true,
-  url: explicitVideoStreamUrl,
-  origin: '',
-  host: '',
-  port: Number.isFinite(VIDEO_STREAM_PORT) && VIDEO_STREAM_PORT > 0 ? VIDEO_STREAM_PORT : 5000,
-  path: VIDEO_STREAM_PATH,
-  source: explicitVideoStreamUrl ? 'env' : 'unresolved',
-  discoveryState: explicitVideoStreamUrl ? 'manual' : 'idle',
-  lastError: '',
-  lastResolvedAt: explicitVideoStreamUrl ? Date.now() : 0,
-  lastDiscoveryAt: 0,
-  lastServiceName: ''
-}
-
-const explicitBaseUrl = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL || '')
-const defaultBaseUrl = resolveDefaultBaseUrl()
-const manualBaseUrl = explicitBaseUrl ? '' : loadManualBaseUrl()
-const cachedBaseUrl = explicitBaseUrl || manualBaseUrl ? '' : loadStoredBaseUrl()
+const manualVideoStreamUrl = explicitVideoStreamUrl ? '' : loadManualVideoStreamUrl()
+const initialVideoConfig = createStoredVideoConfig()
 
 const apiState = reactive({
-  baseUrl: explicitBaseUrl || manualBaseUrl || cachedBaseUrl || defaultBaseUrl,
-  source: explicitBaseUrl ? 'env' : manualBaseUrl ? 'manual' : cachedBaseUrl ? 'cache' : 'default',
-  discoveryState: explicitBaseUrl || manualBaseUrl ? 'manual' : 'idle',
-  lastError: '',
-  lastResolvedAt: 0,
-  lastDiscoveryAt: 0,
-  lastDiscoveryReason: '',
-  lastServiceName: '',
-  lastHealthUrl: '',
-  manualBaseUrl,
-  isManualOverride: Boolean(manualBaseUrl),
-  isEnvOverride: Boolean(explicitBaseUrl),
-  canEditBaseUrl: !explicitBaseUrl,
-  video: { ...defaultVideoConfig }
+  video: { ...initialVideoConfig }
 })
 
-let resolveBaseUrlPromise = null
 let resolveVideoUrlPromise = null
 
 export const apiEndpointState = readonly(apiState)
 
 export const apiConfig = {
-  get baseUrl() {
-    return apiState.baseUrl
-  },
-  pollInterval: Number(import.meta.env.VITE_API_POLL_INTERVAL || 5000),
-  serviceNamePrefix: SERVICE_NAME_PREFIX,
-  discoveryTimeoutMs: DISCOVERY_TIMEOUT_MS,
+  pollInterval: parsePositiveInt(import.meta.env.VITE_API_POLL_INTERVAL, 5000),
   videoServiceNamePrefix: VIDEO_SERVICE_NAME_PREFIX,
   videoServiceType: VIDEO_SERVICE_TYPE,
   videoDiscoveryTimeoutMs: VIDEO_DISCOVERY_TIMEOUT_MS
-}
-
-export function getApiBaseUrl() {
-  return apiState.baseUrl
-}
-
-export function getApiState() {
-  return { ...apiState }
 }
 
 export function useApiEndpointState() {
@@ -105,81 +55,8 @@ export function getVideoStreamUrl() {
   return resolveVideoUrlFromParts(apiState.video)
 }
 
-export function buildApiUrl(path) {
-  return `${apiState.baseUrl}${normalizeApiPath(path)}`
-}
-
-export async function ensureApiBaseUrl(options = {}) {
-  const {
-    forceDiscovery = false,
-    forceHealthCheck = false,
-    reason = 'request'
-  } = options
-
-  if (hasLockedApiBaseUrl() && !forceHealthCheck) {
-    return apiState.baseUrl
-  }
-
-  if (resolveBaseUrlPromise && !forceDiscovery && !forceHealthCheck) {
-    return resolveBaseUrlPromise
-  }
-
-  resolveBaseUrlPromise = (async () => {
-    const shouldProbeCurrentFirst =
-      !forceDiscovery &&
-      (!Capacitor.isNativePlatform() || apiState.source !== 'default')
-
-    if (shouldProbeCurrentFirst) {
-      try {
-        const result = await validateCandidate({
-          baseUrl: apiState.baseUrl,
-          source: apiState.source || 'current',
-          reason
-        })
-        return result.baseUrl
-      } catch (error) {
-        apiState.lastError = toErrorMessage(error)
-      }
-    }
-
-    let services = []
-    if (!hasLockedApiBaseUrl() && Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('LanDiscovery')) {
-      try {
-        services = await discoverNativeServices(reason)
-      } catch (error) {
-        apiState.discoveryState = 'failed'
-        apiState.lastError = toErrorMessage(error)
-      }
-    }
-
-    const candidates = buildCandidates(services)
-    let lastError = null
-
-    for (const candidate of candidates) {
-      try {
-        const result = await validateCandidate(candidate)
-        return result.baseUrl
-      } catch (error) {
-        lastError = error
-      }
-    }
-
-    apiState.discoveryState = 'failed'
-    apiState.lastError = toErrorMessage(lastError) || '未找到可用的局域网后端服务'
-    throw lastError || new Error('未找到可用的局域网后端服务')
-  })()
-    .finally(() => {
-      resolveBaseUrlPromise = null
-    })
-
-  return resolveBaseUrlPromise
-}
-
 export async function ensureVideoStreamUrl(options = {}) {
-  const {
-    forceDiscovery = false,
-    reason = 'video'
-  } = options
+  const { forceDiscovery = false, reason = 'video' } = options
 
   if (!apiState.video?.enabled) {
     return ''
@@ -195,13 +72,11 @@ export async function ensureVideoStreamUrl(options = {}) {
 
   const currentUrl = resolveVideoUrlFromParts(apiState.video)
   if (currentUrl && !forceDiscovery) {
-    if (apiState.video.url !== currentUrl) {
-      applyResolvedVideoCandidate({
-        ...apiState.video,
-        url: currentUrl,
-        source: apiState.video.source || 'configured'
-      })
-    }
+    applyResolvedVideoCandidate({
+      ...apiState.video,
+      url: currentUrl,
+      source: apiState.video.source || 'configured'
+    })
     return currentUrl
   }
 
@@ -239,141 +114,59 @@ export async function ensureVideoStreamUrl(options = {}) {
   return resolveVideoUrlPromise
 }
 
-export async function fetchApiJson(path, options = {}) {
-  const requestPath = normalizeApiPath(path)
-  const retryDiscovery = options.retryDiscovery !== false
-  const baseUrl = await ensureApiBaseUrl({
-    reason: `request:${requestPath}`
-  })
-
-  try {
-    return await requestJsonAbsolute(`${baseUrl}${requestPath}`, REQUEST_TIMEOUT_MS)
-  } catch (error) {
-    if (!retryDiscovery || hasLockedApiBaseUrl()) {
-      throw error
-    }
-
-    const retryBaseUrl = await ensureApiBaseUrl({
-      forceDiscovery: true,
-      forceHealthCheck: true,
-      reason: `retry:${requestPath}`
-    })
-
-    return requestJsonAbsolute(`${retryBaseUrl}${requestPath}`, REQUEST_TIMEOUT_MS)
+export function testVideoStreamUrl(videoInput) {
+  const normalizedUrl = normalizeManualVideoStreamUrl(videoInput)
+  if (!normalizedUrl) {
+    throw new Error('请输入有效的视频地址')
   }
-}
-
-export async function testApiBaseUrl(baseUrl) {
-  const normalizedBaseUrl = normalizeBaseUrl(baseUrl)
-  if (!normalizedBaseUrl) {
-    throw new Error('请输入有效的服务器地址')
-  }
-
-  return validateCandidate(
-    {
-      baseUrl: normalizedBaseUrl,
-      source: 'manual',
-      reason: 'manual-check'
-    },
-    {
-      applyResult: false
-    }
-  )
-}
-
-export async function saveManualApiBaseUrl(baseUrl) {
-  if (explicitBaseUrl) {
-    throw new Error('当前构建已通过环境变量固定服务器地址，不能在应用内修改')
-  }
-
-  const result = await testApiBaseUrl(baseUrl)
-  const resolvedBaseUrl = normalizeBaseUrl(result.baseUrl)
-
-  persistManualBaseUrl(resolvedBaseUrl)
-  clearStoredBaseUrl()
-
-  apiState.manualBaseUrl = resolvedBaseUrl
-  apiState.isManualOverride = true
-  apiState.baseUrl = resolvedBaseUrl
-  apiState.source = 'manual'
-  apiState.discoveryState = 'manual'
-  apiState.lastError = ''
-  apiState.lastResolvedAt = Date.now()
-  apiState.lastServiceName = result.health?.discovery?.serviceName || ''
-  apiState.lastHealthUrl = result.healthUrl
-  apiState.video = mergeVideoConfig(
-    apiState.video,
-    resolveVideoConfig(
-      {
-        baseUrl: resolvedBaseUrl,
-        source: 'manual'
-      },
-      result.health
-    )
-  )
-  resolveBaseUrlPromise = null
 
   return {
-    ...result,
-    baseUrl: resolvedBaseUrl
+    url: normalizedUrl
   }
 }
 
-export function clearManualApiBaseUrl() {
-  if (explicitBaseUrl) {
-    return getApiState()
+export function saveManualVideoStreamUrl(videoInput) {
+  if (explicitVideoStreamUrl) {
+    throw new Error('当前构建已通过环境变量固定视频地址，不能在应用内修改')
   }
 
-  clearStoredManualBaseUrl()
-  apiState.manualBaseUrl = ''
-  apiState.isManualOverride = false
-  apiState.baseUrl = defaultBaseUrl
-  apiState.source = 'default'
-  apiState.discoveryState = 'idle'
-  apiState.lastError = ''
-  apiState.lastResolvedAt = 0
-  apiState.lastDiscoveryAt = 0
-  apiState.lastDiscoveryReason = ''
-  apiState.lastServiceName = ''
-  apiState.lastHealthUrl = ''
-  apiState.video = { ...defaultVideoConfig }
-  resolveBaseUrlPromise = null
+  const result = testVideoStreamUrl(videoInput)
+  persistManualVideoStreamUrl(result.url)
 
-  return getApiState()
+  apiState.video = {
+    ...apiState.video,
+    enabled: true,
+    url: result.url,
+    origin: '',
+    host: '',
+    port: getPortFromUrl(result.url, defaultVideoConfig().port),
+    path: getPathFromUrl(result.url, VIDEO_STREAM_PATH),
+    source: 'manual',
+    discoveryState: 'manual',
+    lastError: '',
+    lastResolvedAt: Date.now(),
+    manualUrl: result.url,
+    isEnvOverride: false,
+    canEditUrl: true
+  }
+  resolveVideoUrlPromise = null
+
+  return result
 }
 
-function buildCandidates(services = []) {
-  const candidates = []
-
-  for (const service of services) {
-    addCandidate(candidates, {
-      baseUrl: service.baseUrl,
-      source: 'mdns',
-      reason: 'mdns',
-      serviceName: service.serviceName,
-      healthUrl: service.healthUrl
-    })
+export function clearManualVideoStreamUrl() {
+  if (explicitVideoStreamUrl) {
+    return getVideoState()
   }
 
-  addCandidate(candidates, {
-    baseUrl: apiState.baseUrl,
-    source: apiState.source || 'current',
-    reason: 'current'
-  })
+  clearStoredManualVideoStreamUrl()
+  apiState.video = {
+    ...createStoredVideoConfig({ includeManual: false }),
+    lastDiscoveryAt: apiState.video?.lastDiscoveryAt || 0
+  }
+  resolveVideoUrlPromise = null
 
-  addCandidate(candidates, {
-    baseUrl: loadStoredBaseUrl(),
-    source: 'cache',
-    reason: 'cache'
-  })
-
-  addCandidate(candidates, {
-    baseUrl: defaultBaseUrl,
-    source: 'default',
-    reason: 'default'
-  })
-
-  return candidates
+  return getVideoState()
 }
 
 function buildVideoCandidates(services = [], options = {}) {
@@ -398,9 +191,9 @@ function buildVideoCandidates(services = [], options = {}) {
       host: attributes.streamHost || attributes.videoHost || service.host || '',
       port: parsePositiveInt(
         attributes.streamPort ?? attributes.videoPort ?? service.port,
-        service.port || defaultVideoConfig.port
+        service.port || defaultVideoConfig().port
       ),
-      path: resolveDiscoveredVideoPath(attributes, defaultVideoConfig.path)
+      path: resolveDiscoveredVideoPath(attributes, defaultVideoConfig().path)
     })
   }
 
@@ -409,22 +202,6 @@ function buildVideoCandidates(services = [], options = {}) {
   }
 
   return candidates
-}
-
-function addCandidate(candidates, candidate) {
-  const baseUrl = normalizeBaseUrl(candidate.baseUrl || '')
-  if (!baseUrl) {
-    return
-  }
-
-  if (candidates.some((item) => item.baseUrl === baseUrl)) {
-    return
-  }
-
-  candidates.push({
-    ...candidate,
-    baseUrl
-  })
 }
 
 function addVideoCandidate(candidates, candidate) {
@@ -446,39 +223,10 @@ function addVideoCandidate(candidates, candidate) {
     url,
     origin: normalizeAbsoluteUrl(candidate.origin || ''),
     host: normalizeHost(candidate.host || ''),
-    port: parsePositiveInt(candidate.port, defaultVideoConfig.port),
-    path: normalizeUrlPath(candidate.path || defaultVideoConfig.path),
+    port: parsePositiveInt(candidate.port, defaultVideoConfig().port),
+    path: normalizeUrlPath(candidate.path || defaultVideoConfig().path),
     serviceName: candidate.serviceName || ''
   })
-}
-
-async function discoverNativeServices(reason) {
-  apiState.discoveryState = 'discovering'
-  apiState.lastDiscoveryReason = reason
-
-  const result = await LanDiscovery.discoverBackend({
-    serviceNamePrefix: apiConfig.serviceNamePrefix,
-    timeoutMs: apiConfig.discoveryTimeoutMs,
-    maxResults: 8
-  })
-
-  apiState.lastDiscoveryAt = Number(result?.discoveredAt) || Date.now()
-  apiState.discoveryState = 'completed'
-
-  if (!Array.isArray(result?.services)) {
-    return []
-  }
-
-  return result.services
-    .filter((item) => item && typeof item === 'object' && normalizeBaseUrl(item.baseUrl))
-    .map((item) => ({
-      baseUrl: normalizeBaseUrl(item.baseUrl),
-      healthUrl: item.healthUrl || '',
-      serviceName: item.serviceName || '',
-      attributes: item.attributes || {},
-      host: item.host || '',
-      port: Number(item.port) || 0
-    }))
 }
 
 async function discoverNativeVideoServices(reason) {
@@ -488,7 +236,8 @@ async function discoverNativeVideoServices(reason) {
     serviceNamePrefix: apiConfig.videoServiceNamePrefix,
     serviceType: apiConfig.videoServiceType,
     timeoutMs: apiConfig.videoDiscoveryTimeoutMs,
-    maxResults: 6
+    maxResults: 6,
+    reason
   })
 
   apiState.video.lastDiscoveryAt = Number(result?.discoveredAt) || Date.now()
@@ -511,53 +260,6 @@ async function discoverNativeVideoServices(reason) {
     }))
 }
 
-async function validateCandidate(candidate, options = {}) {
-  const { applyResult = true } = options
-  const baseUrl = normalizeBaseUrl(candidate.baseUrl || '')
-  if (!baseUrl) {
-    throw new Error('后端地址无效')
-  }
-
-  const healthUrl = candidate.healthUrl || `${baseUrl}${HEALTH_SUFFIX}`
-
-  try {
-    const health = await requestJsonAbsolute(healthUrl, HEALTHCHECK_TIMEOUT_MS)
-    if (!isMoodPawsHealth(health)) {
-      throw new Error('发现了局域网服务，但它不是 MoodPaws 后端')
-    }
-
-    if (applyResult) {
-      applyResolvedCandidate(candidate, baseUrl, healthUrl, health)
-    }
-
-    return {
-      baseUrl,
-      healthUrl,
-      health
-    }
-  } catch (error) {
-    if (candidate.source === 'cache') {
-      clearStoredBaseUrl()
-    }
-    throw error
-  }
-}
-
-function applyResolvedCandidate(candidate, baseUrl, healthUrl, health) {
-  apiState.baseUrl = baseUrl
-  apiState.source = candidate.source || 'resolved'
-  apiState.discoveryState = candidate.source === 'mdns' ? 'resolved' : apiState.discoveryState
-  apiState.lastError = ''
-  apiState.lastResolvedAt = Date.now()
-  apiState.lastServiceName = candidate.serviceName || health?.discovery?.serviceName || ''
-  apiState.lastHealthUrl = healthUrl
-  apiState.video = mergeVideoConfig(apiState.video, resolveVideoConfig(candidate, health))
-
-  if (!hasLockedApiBaseUrl()) {
-    persistBaseUrl(baseUrl)
-  }
-}
-
 function applyResolvedVideoCandidate(candidate) {
   const resolvedUrl = resolveVideoUrlFromParts(candidate)
   if (!resolvedUrl) {
@@ -570,201 +272,19 @@ function applyResolvedVideoCandidate(candidate) {
     url: resolvedUrl,
     origin: normalizeAbsoluteUrl(candidate.origin || ''),
     host: normalizeHost(candidate.host || ''),
-    port: parsePositiveInt(candidate.port, defaultVideoConfig.port),
-    path: normalizeUrlPath(candidate.path || defaultVideoConfig.path),
+    port: parsePositiveInt(candidate.port, defaultVideoConfig().port),
+    path: normalizeUrlPath(candidate.path || defaultVideoConfig().path),
     source: candidate.source || apiState.video.source || 'resolved',
     discoveryState: 'resolved',
     lastError: '',
     lastResolvedAt: Date.now(),
-    lastServiceName: candidate.serviceName || apiState.video.lastServiceName || ''
+    lastServiceName: candidate.serviceName || apiState.video.lastServiceName || '',
+    manualUrl: candidate.source === 'manual' ? resolvedUrl : apiState.video.manualUrl || '',
+    isEnvOverride: Boolean(explicitVideoStreamUrl),
+    canEditUrl: !explicitVideoStreamUrl
   }
 
   return resolvedUrl
-}
-
-async function requestJsonAbsolute(url, timeoutMs) {
-  if (Capacitor.isNativePlatform()) {
-    const response = await CapacitorHttp.get({
-      url,
-      headers: {
-        Accept: 'application/json'
-      },
-      connectTimeout: timeoutMs,
-      readTimeout: timeoutMs,
-      responseType: 'json'
-    })
-
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(`Request failed: ${response.status}`)
-    }
-
-    return response.data
-  }
-
-  const controller = typeof AbortController === 'undefined' ? null : new AbortController()
-  const timeoutId = controller
-    ? window.setTimeout(() => controller.abort(), timeoutMs)
-    : null
-
-  try {
-    const response = await fetch(url, {
-      headers: {
-        Accept: 'application/json'
-      },
-      signal: controller?.signal
-    })
-
-    if (!response.ok) {
-      throw new Error(`Request failed: ${response.status}`)
-    }
-
-    return response.json()
-  } catch (error) {
-    if (error?.name === 'AbortError') {
-      throw new Error('Request timed out')
-    }
-    throw error
-  } finally {
-    if (timeoutId !== null) {
-      window.clearTimeout(timeoutId)
-    }
-  }
-}
-
-function isMoodPawsHealth(payload) {
-  return Boolean(payload && payload.ok === true && payload.service === 'moodpaws-server')
-}
-
-function persistBaseUrl(baseUrl) {
-  if (typeof window === 'undefined' || !window.localStorage) {
-    return
-  }
-
-  window.localStorage.setItem(CACHE_STORAGE_KEY, baseUrl)
-}
-
-function loadStoredBaseUrl() {
-  if (typeof window === 'undefined' || !window.localStorage) {
-    return ''
-  }
-
-  return normalizeBaseUrl(window.localStorage.getItem(CACHE_STORAGE_KEY) || '')
-}
-
-function clearStoredBaseUrl() {
-  if (typeof window === 'undefined' || !window.localStorage) {
-    return
-  }
-
-  window.localStorage.removeItem(CACHE_STORAGE_KEY)
-}
-
-function persistManualBaseUrl(baseUrl) {
-  if (typeof window === 'undefined' || !window.localStorage) {
-    return
-  }
-
-  window.localStorage.setItem(MANUAL_STORAGE_KEY, baseUrl)
-}
-
-function loadManualBaseUrl() {
-  if (typeof window === 'undefined' || !window.localStorage) {
-    return ''
-  }
-
-  return normalizeBaseUrl(window.localStorage.getItem(MANUAL_STORAGE_KEY) || '')
-}
-
-function clearStoredManualBaseUrl() {
-  if (typeof window === 'undefined' || !window.localStorage) {
-    return
-  }
-
-  window.localStorage.removeItem(MANUAL_STORAGE_KEY)
-}
-
-function hasLockedApiBaseUrl() {
-  return Boolean(explicitBaseUrl || apiState.manualBaseUrl)
-}
-
-function resolveDefaultBaseUrl() {
-  if (typeof window === 'undefined') {
-    return 'http://127.0.0.1:3001/api'
-  }
-
-  const { hostname, protocol } = window.location
-
-  if (!hostname || protocol === 'capacitor:' || protocol === 'file:') {
-    return 'http://127.0.0.1:3001/api'
-  }
-
-  return normalizeBaseUrl(`http://${hostname}:3001/api`)
-}
-
-function resolveVideoConfig(candidate, health) {
-  const healthVideo = health && typeof health.video === 'object' ? health.video : null
-  const attributes = candidate?.attributes && typeof candidate.attributes === 'object'
-    ? candidate.attributes
-    : {}
-
-  const enabledValue =
-    healthVideo?.enabled ??
-    parseBooleanString(attributes.video) ??
-    defaultVideoConfig.enabled
-
-  const url = normalizeAbsoluteUrl(healthVideo?.url || attributes.videoUrl || '')
-  const origin = normalizeAbsoluteUrl(healthVideo?.origin || attributes.videoOrigin || '')
-  const host = normalizeHost(healthVideo?.host || attributes.videoHost || '')
-  const port = parsePositiveInt(healthVideo?.port ?? attributes.videoPort, defaultVideoConfig.port)
-  const path = normalizeUrlPath(healthVideo?.path || attributes.videoPath || defaultVideoConfig.path)
-  const hasEndpoint = Boolean(url || origin || host)
-
-  return {
-    enabled: Boolean(enabledValue),
-    url,
-    origin,
-    host,
-    port,
-    path,
-    source: hasEndpoint ? 'backend-config' : '',
-    discoveryState: hasEndpoint ? 'resolved' : 'idle',
-    lastError: '',
-    lastResolvedAt: hasEndpoint ? Date.now() : 0,
-    lastServiceName: candidate?.serviceName || health?.discovery?.serviceName || ''
-  }
-}
-
-function mergeVideoConfig(current, incoming) {
-  const preserveResolvedVideo = hasVideoEndpoint(current) && !hasVideoEndpoint(incoming)
-
-  return {
-    ...current,
-    ...incoming,
-    enabled: preserveResolvedVideo ? current.enabled : incoming.enabled ?? current.enabled,
-    url: preserveResolvedVideo
-      ? current.url
-      : normalizeAbsoluteUrl(incoming.url || ''),
-    origin: preserveResolvedVideo
-      ? current.origin || ''
-      : normalizeAbsoluteUrl(incoming.origin || ''),
-    host: preserveResolvedVideo
-      ? current.host || ''
-      : normalizeHost(incoming.host || ''),
-    port: parsePositiveInt(incoming.port, current.port || defaultVideoConfig.port),
-    path: normalizeUrlPath(incoming.path || current.path || defaultVideoConfig.path),
-    source: preserveResolvedVideo ? current.source : incoming.source || current.source,
-    discoveryState: preserveResolvedVideo
-      ? current.discoveryState
-      : incoming.discoveryState || current.discoveryState,
-    lastError: incoming.lastError || (preserveResolvedVideo ? current.lastError : ''),
-    lastResolvedAt: preserveResolvedVideo
-      ? current.lastResolvedAt || 0
-      : incoming.lastResolvedAt || 0,
-    lastDiscoveryAt: incoming.lastDiscoveryAt || current.lastDiscoveryAt || 0,
-    lastServiceName: preserveResolvedVideo
-      ? current.lastServiceName || ''
-      : incoming.lastServiceName || current.lastServiceName || ''
-  }
 }
 
 function resolveVideoUrlFromParts(candidate = {}) {
@@ -777,9 +297,9 @@ function resolveVideoUrlFromParts(candidate = {}) {
   if (origin) {
     try {
       const url = new URL(origin)
-      const port = parsePositiveInt(candidate.port, Number(url.port) || defaultVideoConfig.port)
+      const port = parsePositiveInt(candidate.port, Number(url.port) || defaultVideoConfig().port)
       url.port = String(port)
-      url.pathname = normalizeUrlPath(candidate.path || defaultVideoConfig.path)
+      url.pathname = normalizeUrlPath(candidate.path || defaultVideoConfig().path)
       url.search = ''
       url.hash = ''
       return url.toString()
@@ -797,23 +317,15 @@ function resolveVideoUrlFromParts(candidate = {}) {
     const baseUrl = /^https?:\/\//i.test(host)
       ? new URL(host)
       : new URL(`http://${formatHostForUrl(host)}`)
-    const port = parsePositiveInt(candidate.port, Number(baseUrl.port) || defaultVideoConfig.port)
+    const port = parsePositiveInt(candidate.port, Number(baseUrl.port) || defaultVideoConfig().port)
     baseUrl.port = String(port)
-    baseUrl.pathname = normalizeUrlPath(candidate.path || defaultVideoConfig.path)
+    baseUrl.pathname = normalizeUrlPath(candidate.path || defaultVideoConfig().path)
     baseUrl.search = ''
     baseUrl.hash = ''
     return baseUrl.toString()
   } catch {
     return ''
   }
-}
-
-function hasVideoEndpoint(candidate = {}) {
-  return Boolean(
-    normalizeAbsoluteUrl(candidate.url || '') ||
-    normalizeAbsoluteUrl(candidate.origin || '') ||
-    normalizeHost(candidate.host || '')
-  )
 }
 
 function shouldDiscoverVideoViaMdns() {
@@ -828,44 +340,34 @@ function resolveDiscoveredVideoPath(attributes, fallback) {
   const path =
     attributes.streamPath ||
     attributes.videoPath ||
-    (isLikelyVideoPath(attributes.path) ? attributes.path : '')
+    attributes.path ||
+    ''
 
   return normalizeUrlPath(path || fallback)
 }
 
-function isLikelyVideoPath(path) {
-  const rawPath = safeTrim(path)
-  if (!rawPath) {
-    return false
+function persistManualVideoStreamUrl(videoUrl) {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return
   }
 
-  const normalized = normalizeUrlPath(rawPath)
-  return normalized !== DEFAULT_HEALTH_PATH
+  window.localStorage.setItem(VIDEO_MANUAL_STORAGE_KEY, videoUrl)
 }
 
-function normalizeBaseUrl(value) {
-  const trimmed = safeTrim(value).replace(/\/+$/, '')
-  if (!trimmed) {
+function loadManualVideoStreamUrl() {
+  if (typeof window === 'undefined' || !window.localStorage) {
     return ''
   }
 
-  if (trimmed.endsWith(`${API_SUFFIX}${HEALTH_SUFFIX}`)) {
-    return trimmed.slice(0, -HEALTH_SUFFIX.length)
-  }
-
-  if (trimmed.endsWith(API_SUFFIX)) {
-    return trimmed
-  }
-
-  return `${trimmed}${API_SUFFIX}`
+  return normalizeManualVideoStreamUrl(window.localStorage.getItem(VIDEO_MANUAL_STORAGE_KEY) || '')
 }
 
-function normalizeApiPath(path) {
-  if (!path) {
-    return '/'
+function clearStoredManualVideoStreamUrl() {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return
   }
 
-  return path.startsWith('/') ? path : `/${path}`
+  window.localStorage.removeItem(VIDEO_MANUAL_STORAGE_KEY)
 }
 
 function normalizeUrlPath(path) {
@@ -888,6 +390,35 @@ function normalizeAbsoluteUrl(value) {
     if (!['http:', 'https:'].includes(url.protocol)) {
       return ''
     }
+    return url.toString()
+  } catch {
+    return ''
+  }
+}
+
+function normalizeManualVideoStreamUrl(value) {
+  const trimmed = safeTrim(value)
+  if (!trimmed) {
+    return ''
+  }
+
+  const prepared = /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`
+
+  try {
+    const url = new URL(prepared)
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      return ''
+    }
+
+    if (!url.port) {
+      url.port = String(getDefaultVideoPort())
+    }
+
+    if (!url.pathname || url.pathname === '/') {
+      url.pathname = VIDEO_STREAM_PATH
+    }
+
+    url.hash = ''
     return url.toString()
   } catch {
     return ''
@@ -917,30 +448,83 @@ function normalizeServiceType(value) {
   return normalized.endsWith('.') ? normalized : `${normalized}.`
 }
 
-function parseBooleanString(value) {
-  if (typeof value === 'boolean') {
-    return value
+function createStoredVideoConfig(options = {}) {
+  const includeManual = options.includeManual !== false
+
+  if (explicitVideoStreamUrl) {
+    return defaultVideoConfig({
+      url: explicitVideoStreamUrl,
+      port: getPortFromUrl(explicitVideoStreamUrl, getDefaultVideoPort()),
+      path: getPathFromUrl(explicitVideoStreamUrl, VIDEO_STREAM_PATH),
+      source: 'env',
+      discoveryState: 'manual',
+      lastResolvedAt: Date.now(),
+      isEnvOverride: true,
+      canEditUrl: false
+    })
   }
 
-  const normalized = safeTrim(value).toLowerCase()
-  if (!normalized) {
-    return null
+  if (includeManual && manualVideoStreamUrl) {
+    return defaultVideoConfig({
+      url: manualVideoStreamUrl,
+      port: getPortFromUrl(manualVideoStreamUrl, getDefaultVideoPort()),
+      path: getPathFromUrl(manualVideoStreamUrl, VIDEO_STREAM_PATH),
+      source: 'manual',
+      discoveryState: 'manual',
+      lastResolvedAt: Date.now(),
+      manualUrl: manualVideoStreamUrl
+    })
   }
 
-  if (['1', 'true', 'yes', 'on'].includes(normalized)) {
-    return true
-  }
+  return defaultVideoConfig()
+}
 
-  if (['0', 'false', 'no', 'off'].includes(normalized)) {
-    return false
+function defaultVideoConfig(overrides = {}) {
+  return {
+    enabled: true,
+    url: '',
+    origin: '',
+    host: '',
+    port: getDefaultVideoPort(),
+    path: VIDEO_STREAM_PATH,
+    source: 'unresolved',
+    discoveryState: 'idle',
+    lastError: '',
+    lastResolvedAt: 0,
+    lastDiscoveryAt: 0,
+    lastServiceName: '',
+    manualUrl: '',
+    isEnvOverride: Boolean(explicitVideoStreamUrl),
+    canEditUrl: !explicitVideoStreamUrl,
+    ...overrides
   }
+}
 
-  return null
+function getPortFromUrl(urlString, fallback) {
+  try {
+    const url = new URL(urlString)
+    return parsePositiveInt(url.port, fallback)
+  } catch {
+    return fallback
+  }
+}
+
+function getPathFromUrl(urlString, fallback) {
+  try {
+    const url = new URL(urlString)
+    return normalizeUrlPath(url.pathname || fallback)
+  } catch {
+    return fallback
+  }
+}
+
+function getDefaultVideoPort() {
+  return Number.isFinite(VIDEO_STREAM_PORT) && VIDEO_STREAM_PORT > 0 ? VIDEO_STREAM_PORT : 5000
 }
 
 function parsePositiveInt(value, fallback) {
   const parsed = Number(value)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback
 }
 
 function safeTrim(value) {

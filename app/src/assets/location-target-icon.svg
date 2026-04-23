@@ -1,0 +1,28 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="location-icon-stroke" x1="20" y1="16" x2="45" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6F9B80" />
+      <stop offset="1" stop-color="#3F7356" />
+    </linearGradient>
+    <linearGradient id="location-icon-core" x1="28" y1="23" x2="36" y2="31" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F6C47A" />
+      <stop offset="1" stop-color="#F2A65A" />
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="21" fill="#FFF8EE" stroke="#DDE9DE" stroke-width="1.6" />
+  <path
+    d="M32 18.5C25.65 18.5 20.5 23.65 20.5 30C20.5 38.86 32 47.5 32 47.5C32 47.5 43.5 38.86 43.5 30C43.5 23.65 38.35 18.5 32 18.5Z"
+    stroke="url(#location-icon-stroke)"
+    stroke-width="2.8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="32" cy="29.9" r="4.5" fill="url(#location-icon-core)" stroke="#FFFDF8" stroke-width="1.5" />
+  <path
+    d="M18 46.8C21.02 44.48 24.68 43.2 28.46 43.2H35.54C39.32 43.2 42.98 44.48 46 46.8"
+    stroke="#5F8F72"
+    stroke-opacity="0.22"
+    stroke-width="2.2"
+    stroke-linecap="round"
+  />
+</svg>
