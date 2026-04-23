@@ -71,7 +71,9 @@ const App: React.FC = () => {
     const interval = window.setInterval(() => {
       setCabins(prevCabins =>
         prevCabins.map(cabin => {
-          const temperature = Number((cabin.temperature + (Math.random() - 0.5) * 0.5).toFixed(1));
+          const temperatureDrift = (Math.random() - 0.5) * 0.2;
+          const temperatureBias = (cabin.controls.heater ? 0.9 : 0) - (cabin.controls.fan ? 0.9 : 0);
+          const temperature = Number((cabin.temperature + temperatureDrift + temperatureBias).toFixed(1));
           const humidity = Math.max(35, Math.min(75, Math.round(cabin.humidity + (Math.random() - 0.5) * 2)));
           const airQuality = Math.max(55, Math.min(98, Math.round(cabin.airQuality + (Math.random() - 0.5) * 3)));
           const heartRate = Math.max(95, Math.min(165, Math.round(cabin.heartRate + (Math.random() - 0.5) * 5)));
