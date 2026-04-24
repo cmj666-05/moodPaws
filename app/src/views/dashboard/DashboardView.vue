@@ -1,13 +1,16 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { ensureVideoStreamUrl, getVideoStreamUrl } from "../../config/api";
+import { Capacitor } from "@capacitor/core";
+import { getVideoStreamUrl } from "../../config/api";
 import { usePetApi } from "../../composables/usePetApi";
 
-const fallbackHouse = {
-  id: 1,
-  name: "宠舍状态",
-  petName: "等待设备",
-  petProfile: "暂无数据",
+const petPhotoUrl =
+  "https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=240&q=80";
+
+const emptyHouseState = {
+  name: "当前宠舍",
+  petName: "Lucky",
+  petProfile: "金毛寻回犬 · 3 岁",
   notificationCount: 0,
   environment: {
     temperature: { value: "--", status: "等待数据", unit: "°C" },
@@ -21,8 +24,8 @@ const fallbackHouse = {
     videoStreamUrl: "",
   },
   emotion: {
-    primary: "待识别",
-    secondary: "等待同步",
+    primary: "开心",
+    secondary: "想玩耍",
   },
 };
 
@@ -31,6 +34,7 @@ const {
   errorMessage,
   latestTelemetry,
   metricSections,
+  mqttMetricMap,
   emotion,
   refreshTelemetryBundle,
   refreshEmotionBundle,
@@ -45,21 +49,22 @@ const isVideoConnecting = ref(false);
 const reconnectAttempt = ref(0);
 let deferredVideoDiscoveryTask = null;
 
-const allMetrics = computed(() =>
-  metricSections.value.flatMap((section) => section.metrics || []),
-);
-
 const getMetric = (keys) =>
   computed(() => {
     const keyList = Array.isArray(keys) ? keys : [keys];
-    return allMetrics.value.find((metric) => keyList.includes(metric.key));
+    return keyList
+      .map((key) => mqttMetricMap.value[key])
+      .find((metric) => metric);
   });
 
-const temperatureMetric = getMetric(["Collar:temp"]);
-const humidityMetric = getMetric(["Collar:humidity"]);
-const co2Metric = getMetric(["Collar:CO2"]);
-const airQualityMetric = getMetric(["Collar:airQuality"]);
+const temperatureMetric = getMetric(["PetHouse:Temp"]);
+const humidityMetric = getMetric(["PetHouse:Humi"]);
+const co2Metric = getMetric(["PetHouse:CO2"]);
+const airQualityMetric = getMetric(["PetHouse:MQ135"]);
 const resolvedVideoStreamUrl = computed(() => getVideoStreamUrl());
+const hasTelemetryData = computed(() =>
+  Boolean(metricSections.value.length || Object.keys(mqttMetricMap.value).length),
+);
 
 function scheduleDeferredTask(callback, timeout = 240) {
   if (typeof window === "undefined") {
@@ -107,19 +112,19 @@ const petProfile = computed(() => {
   const sourceDevice = latestTelemetry.value.source?.deviceName;
   return sourceDevice && sourceDevice !== "--"
     ? "设备已连接"
-    : fallbackHouse.petProfile;
+    : emptyHouseState.petProfile;
 });
-const sourceDeviceName = computed(() => {
-  const sourceDevice = latestTelemetry.value.source?.deviceName;
-  return sourceDevice && sourceDevice !== "--" ? sourceDevice : fallbackHouse.petName;
+
+const petName = computed(() => {
+  return emptyHouseState.petName;
 });
 
 const selectedHouse = computed(() => ({
-  ...fallbackHouse,
-  petName: sourceDeviceName.value,
+  ...emptyHouseState,
+  petName: petName.value,
   petProfile: petProfile.value,
   liveView: {
-    ...fallbackHouse.liveView,
+    ...emptyHouseState.liveView,
     hasVideo: Boolean(resolvedVideoStreamUrl.value),
     videoStreamUrl: resolvedVideoStreamUrl.value,
   },
@@ -127,34 +132,33 @@ const selectedHouse = computed(() => ({
     temperature: {
       value:
         temperatureMetric.value?.value ??
-        fallbackHouse.environment.temperature.value,
+        emptyHouseState.environment.temperature.value,
       status: temperatureMetric.value
         ? "实时同步"
-        : fallbackHouse.environment.temperature.status,
+        : emptyHouseState.environment.temperature.status,
       unit:
         temperatureMetric.value?.unit ||
-        fallbackHouse.environment.temperature.unit,
+        emptyHouseState.environment.temperature.unit,
     },
     humidity: {
-      value:
-        Number(humidityMetric.value?.value) ||
-        fallbackHouse.environment.humidity.value,
-      unit:
-        humidityMetric.value?.unit || fallbackHouse.environment.humidity.unit,
+      ...formatMetricDisplay(
+        humidityMetric.value,
+        emptyHouseState.environment.humidity,
+      ),
     },
     airQuality: formatMetricDisplay(
       airQualityMetric.value,
-      fallbackHouse.environment.airQuality,
+      emptyHouseState.environment.airQuality,
     ),
-    co2: formatMetricDisplay(co2Metric.value, fallbackHouse.environment.co2),
+    co2: formatMetricDisplay(co2Metric.value, emptyHouseState.environment.co2),
   },
   emotion: {
-    primary: emotion.value?.currentMood || fallbackHouse.emotion.primary,
+    primary: emotion.value?.currentMood || emptyHouseState.emotion.primary,
     secondary: errorMessage.value
       ? "稍后再试"
       : loading.value
         ? "正在同步"
-        : fallbackHouse.emotion.secondary,
+        : emptyHouseState.emotion.secondary,
   },
 }));
 
@@ -164,6 +168,54 @@ const streamSrc = computed(() => {
   return reconnectAttempt.value === 0
     ? url
     : `${url}${url.includes("?") ? "&" : "?"}t=${reconnectAttempt.value}`;
+});
+const shouldUseNativeVideoFrame = computed(() =>
+  Capacitor.isNativePlatform() && Boolean(streamSrc.value),
+);
+const nativeVideoFrameSrcdoc = computed(() => {
+  if (!shouldUseNativeVideoFrame.value) {
+    return "";
+  }
+
+  const src = escapeHtmlAttribute(streamSrc.value);
+
+  return `<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+    }
+
+    img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: contain;
+      background: #000;
+    }
+  </style>
+</head>
+<body>
+  <img id="stream" src="${src}" alt="">
+  <script>
+    const img = document.getElementById('stream');
+    const notify = (status) => parent.postMessage({
+      type: 'moodpaws-video-frame',
+      status,
+      src: img.currentSrc || img.src
+    }, '*');
+    img.addEventListener('load', () => notify('load'));
+    img.addEventListener('error', () => notify('error'));
+    setTimeout(() => notify('load'), 1600);
+  <\/script>
+</body>
+</html>`;
 });
 
 const liveViewStatus = computed(() => {
@@ -187,6 +239,20 @@ function handleStreamError() {
   hasVideoError.value = true;
 }
 
+function handleNativeVideoMessage(event) {
+  const payload = event?.data;
+  if (!payload || payload.type !== "moodpaws-video-frame") {
+    return;
+  }
+
+  if (payload.status === "error") {
+    handleStreamError();
+    return;
+  }
+
+  handleStreamLoad();
+}
+
 async function reconnectStream() {
   if (!selectedHouse.value.liveView.hasVideo) {
     openVideoSettings();
@@ -200,22 +266,21 @@ async function reconnectStream() {
 
 function scheduleVideoDiscovery() {
   clearDeferredTask(deferredVideoDiscoveryTask);
+  deferredVideoDiscoveryTask = null;
   hasVideoError.value = false;
   isVideoConnecting.value = Boolean(resolvedVideoStreamUrl.value);
-  deferredVideoDiscoveryTask = scheduleDeferredTask(async () => {
-    deferredVideoDiscoveryTask = null;
-
-    try {
-      const resolvedUrl = await ensureVideoStreamUrl({ reason: "dashboard" });
-      isVideoConnecting.value = Boolean(resolvedUrl);
-    } catch {
-      isVideoConnecting.value = false;
-    }
-  }, 360);
 }
 
 function openVideoSettings() {
   window.dispatchEvent(new Event("moodpaws:open-api-sheet"));
+}
+
+function escapeHtmlAttribute(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 watch(
@@ -238,6 +303,7 @@ watch(
 );
 
 onMounted(async () => {
+  window.addEventListener("message", handleNativeVideoMessage);
   await Promise.all([
     refreshTelemetryBundle({ includeHistory: false, includeTrack: false }),
     refreshEmotionBundle(),
@@ -250,6 +316,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   stopTelemetryPolling();
   stopEmotionPolling();
+  window.removeEventListener("message", handleNativeVideoMessage);
   clearDeferredTask(deferredVideoDiscoveryTask);
 });
 </script>
@@ -265,12 +332,12 @@ onBeforeUnmount(() => {
 
         <div class="header-top">
           <div class="dog-avatar-container">
-            <div class="dog-avatar" aria-label="宠舍设备">舍</div>
+            <img class="dog-avatar" :src="petPhotoUrl" alt="可爱的宠物照片" />
           </div>
           <div class="boarding-info">
             <div class="house-name">{{ selectedHouse.name }}</div>
             <div class="buddy-info">
-              <span class="status-dot"></span>{{ selectedHouse.petName }} ·
+              <span class="status-dot" :class="{ 'is-muted': !hasTelemetryData }"></span>{{ selectedHouse.petName }} ·
               {{ selectedHouse.petProfile }}
             </div>
           </div>
@@ -384,8 +451,22 @@ onBeforeUnmount(() => {
         </div>
         <div class="live-view">
           <div class="video-placeholder">
+            <iframe
+              v-if="
+                selectedHouse.liveView.hasVideo &&
+                !hasVideoError &&
+                shouldUseNativeVideoFrame
+              "
+              :key="streamSrc"
+              :srcdoc="nativeVideoFrameSrcdoc"
+              title="宠舍监控画面"
+              class="video-stream video-frame"
+              :class="{ connecting: isVideoConnecting }"
+              @load="handleStreamLoad"
+              @error="handleStreamError"
+            ></iframe>
             <img
-              v-if="selectedHouse.liveView.hasVideo && !hasVideoError"
+              v-else-if="selectedHouse.liveView.hasVideo && !hasVideoError"
               :key="streamSrc"
               :src="streamSrc"
               alt="宠舍监控画面"
@@ -409,7 +490,7 @@ onBeforeUnmount(() => {
                 {{
                   selectedHouse.liveView.hasVideo
                     ? "看护画面暂时离线，宠舍数据仍会继续同步"
-                    : "还没有填写视频地址，可在连接设置里补充 RDK 视频流地址"
+                    : "还没有填写视频地址，可在服务设置里补充 RDK 视频流地址"
                 }}
               </span>
               <button

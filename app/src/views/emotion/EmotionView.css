@@ -142,16 +142,28 @@
     0 12px 22px rgba(183, 126, 48, 0.16);
 }
 
+.pet-avatar-photo {
+  width: 100%;
+  height: 100%;
+  border-radius: 26px;
+  object-fit: cover;
+  object-position: center 42%;
+  display: block;
+}
+
 .hero-badge-core {
-  width: 44px;
-  height: 44px;
-  border-radius: 16px;
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 28px;
+  height: 28px;
+  border-radius: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: linear-gradient(180deg, var(--emotion-accent) 0%, var(--emotion-accent) 100%);
   color: #ffffff;
-  font-size: 20px;
+  font-size: 13px;
   font-weight: 900;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.32),
@@ -315,10 +327,10 @@
   }
 
   .hero-badge-core {
-    width: 44px;
-    height: 44px;
-    border-radius: 16px;
-    font-size: 20px;
+    width: 28px;
+    height: 28px;
+    border-radius: 11px;
+    font-size: 13px;
   }
 
   .summary-grid {

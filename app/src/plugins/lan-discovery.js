@@ -12,6 +12,9 @@ function createEmptyDiscoveryResult(options = {}) {
 
 export const LanDiscovery = registerPlugin('LanDiscovery', {
   web: async () => ({
+    async discoverBackend(options = {}) {
+      return createEmptyDiscoveryResult(options)
+    },
     async discoverService(options = {}) {
       return createEmptyDiscoveryResult(options)
     }

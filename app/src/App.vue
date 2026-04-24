@@ -161,7 +161,7 @@ onBeforeUnmount(() => {
       </button>
     </nav>
 
-    <button type="button" class="server-fab" aria-label="连接设置" @click="openEndpointSheet">
+    <button type="button" class="server-fab" aria-label="服务器设置" @click="openEndpointSheet">
       <span class="server-fab-icon">
         <svg viewBox="0 0 24 24" fill="none">
           <rect x="4" y="5" width="16" height="5" rx="1.8" stroke="currentColor" stroke-width="1.7" />
@@ -170,7 +170,7 @@ onBeforeUnmount(() => {
           <circle cx="8" cy="16.5" r="0.9" fill="currentColor" />
         </svg>
       </span>
-      <span class="server-fab-text">设置</span>
+      <span class="server-fab-text">服务</span>
     </button>
 
     <ApiEndpointSheet

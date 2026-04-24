@@ -9,6 +9,9 @@ const {
   stopEmotionPolling,
 } = usePetApi();
 
+const petPhotoUrl =
+  "https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=240&q=80";
+
 const emotionCatalog = [
   {
     key: "angry",
@@ -91,15 +94,19 @@ const emotionCatalog = [
 ];
 
 const fallbackMood = {
-  key: "unknown",
-  label: "待识别",
-  mark: "等",
-  brief: "今日还没有新记录",
-  summary: "先保持日常陪伴，新的情绪状态会在有足够信号后自动呈现。",
-  accent: "#7d8a78",
-  soft: "rgba(125, 138, 120, 0.14)",
-  glow: "rgba(125, 138, 120, 0.2)",
-  suggestions: [],
+  key: "happy",
+  label: "开心",
+  mark: "乐",
+  brief: "状态轻松",
+  summary: "整体情绪比较积极，现在适合互动、奖励，或者安排一点轻松活动。",
+  accent: "#5da974",
+  soft: "rgba(93, 169, 116, 0.16)",
+  glow: "rgba(93, 169, 116, 0.22)",
+  suggestions: [
+    { label: "优先动作", value: "现在适合安排一点互动或轻松小游戏。" },
+    { label: "互动方式", value: "可以配合夸奖和小奖励，强化好情绪。" },
+    { label: "环境调整", value: "保持现在这份轻松节奏，不必突然加刺激。" },
+  ],
 };
 
 const moodMetaMap = new Map(emotionCatalog.map((item) => [item.label, item]));
@@ -111,7 +118,7 @@ const currentMood = computed(() =>
 );
 const hasMoodData = computed(() => Boolean(currentMood.value));
 const currentMoodDisplay = computed(
-  () => currentMood.value || "正在倾听它的情绪",
+  () => currentMood.value || fallbackMood.label,
 );
 const currentMoodMeta = computed(
   () => moodMetaMap.get(currentMood.value) || fallbackMood,
@@ -168,6 +175,11 @@ function formatTime(value) {
         </div>
 
         <div class="hero-badge" aria-hidden="true">
+          <img
+            class="pet-avatar-photo"
+            :src="petPhotoUrl"
+            alt="Lucky 的金毛头像"
+          />
           <div class="hero-badge-core">{{ currentMoodMeta.mark }}</div>
         </div>
       </div>
@@ -197,7 +209,7 @@ function formatTime(value) {
       </div>
     </section>
 
-    <section v-if="hasMoodData" class="summary-card">
+    <section class="summary-card">
       <div class="summary-head">
         <span class="card-kicker">AI 建议</span>
         <h2>现在更适合这样陪它</h2>
@@ -213,14 +225,6 @@ function formatTime(value) {
           <strong>{{ item.value }}</strong>
         </div>
       </div>
-    </section>
-
-    <section v-else class="summary-card">
-      <div class="summary-head">
-        <span class="card-kicker">AI 建议</span>
-        <h2>暂无情绪建议</h2>
-      </div>
-      <p class="empty-copy">等阿里云同步到新的情绪数据后，这里会显示对应建议。</p>
     </section>
   </main>
 </template>

@@ -102,11 +102,11 @@
 - `Collar:GPS` -> `Longitude/Latitude`
 - `Collar:XKXY` -> `HeartRate/SPO2`
 
-当前本地联调用 mock 数据时，也应尽量保持与原库一致的聚合入库风格：
+当前本地联调与真实设备上报都应尽量保持与原库一致的聚合入库风格：
 - Topic 使用 `/k1wxaEnEO8L/petInfo/user/get`
 - `payload.deviceName` 使用真实来源设备名，如 `Collar`、`DogHouse`
 - 指标继续放在 `payload.items` 下
-- 如需模拟更丰富的九轴原始数据，可在 `payload.items` 中附带额外运动字段，但当前正式解析链路稳定消费的仍是 `Collar:XYZ` / `Collar:GPS` / `Collar:XKXY` / `PetHouse:*`
+- 如需接入更丰富的九轴原始数据，可在 `payload.items` 中附带额外运动字段，但当前正式解析链路稳定消费的仍是 `Collar:XYZ` / `Collar:GPS` / `Collar:XKXY` / `PetHouse:*`
 
 ### 当前排查结论
 

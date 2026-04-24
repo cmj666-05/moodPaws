@@ -202,7 +202,7 @@ CORS_ORIGIN=*
 - `summary_json`
 - `created_at`
 
-当前启动时会自动插入一条默认 mock 数据，供情绪接口返回。
+当前情绪接口应优先返回真实 telemetry 或真实情绪快照；没有数据时返回空状态。
 
 ---
 
@@ -409,7 +409,7 @@ CORS_ORIGIN=*
 
 - 当最新 telemetry 中存在 `EmotionState` 时，`currentMood` 会优先使用实时设备值映射后的中文文案
 - `score`、`voice`、`fluctuation`、`history` 仍沿用 `emotion_snapshots` 中的快照数据
-- 当 telemetry 暂无 `EmotionState` 时，接口会回退到原有 snapshot/mock 行为
+- 当 telemetry 暂无 `EmotionState` 时，接口会回退到已有真实 snapshot；仍无数据时返回空状态
 
 ---
 

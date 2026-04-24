@@ -53,7 +53,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - MQTT 相关代码主要保留在 `moodpaws-server/` 与 `moodpaws-server/scripts/test-aliyun-mqtt.mjs`，**前端已不再保留 MQTT 直连代码，也不再作为当前页面主流程**。
 - 当前社交过渡页会复用 `usePetApi()` 的状态、指标分组与原始 payload 调试信息。
-- 当前宠舍页仍以本地假数据首版为主，尚未全面接入真实 API。
+- 当前宠舍页通过 `usePetApi()` 消费真实后端 API，没有真实数据时展示空态。
 
 ### 3. 设备数据主要由后端归一化后再渲染
 
@@ -76,6 +76,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - 当前没有配置单元测试框架、lint 或格式化脚本；主要验证方式是运行页面和执行 `pnpm build`。
 - README 仍是 Vite 模板默认内容，项目真实行为应以 `src/`、`md/`、`moodpaws-server/` 和 Capacitor 配置为准。
-- 一些页面使用假数据和模拟状态，尤其宠舍页与情绪页；不要默认所有展示都来自真实设备。
+- 页面应优先展示真实设备数据；没有真实数据时展示空态，不再补本地演示内容。
 - 如果继续推进社交能力，应在 `DashboardView.vue` 基础上演进，而不是再把宠舍内容写回社交入口。
-- 如果继续推进宠舍能力，应在 `SocialView.vue` 基础上演进，并逐步把本地假数据替换成 API 数据。
+- 如果继续推进宠舍能力，应在当前真实 API 链路基础上补齐详情页、异常态与控制流。

@@ -2,9 +2,11 @@
   "appId": "com.moodpaws.app",
   "appName": "moodPaws",
   "webDir": "dist",
-  "plugins": {
-    "CapacitorSQLite": {
-      "androidIsEncryption": false
-    }
+  "android": {
+    "allowMixedContent": true
+  },
+  "server": {
+    "cleartext": true,
+    "allowNavigation": ["10.127.39.52", "10.127.39.243"]
   }
 }

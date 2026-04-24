@@ -6,6 +6,9 @@ import locationTargetIcon from '../../assets/location-target-icon.svg'
 import { usePetApi } from '../../composables/usePetApi'
 import { loadAmap } from '../../services/amap/loader'
 
+const petPhotoUrl =
+  'https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=240&q=80'
+
 let echartsRuntimePromise = null
 
 async function loadEchartsRuntime() {
@@ -110,13 +113,11 @@ const sourceDeviceName = computed(() => {
   const deviceName = latestTelemetry.value.source?.deviceName
   return deviceName && deviceName !== '--' ? deviceName : ''
 })
-const deviceDisplayName = computed(() => sourceDeviceName.value || '等待设备同步')
-const deviceDescription = computed(() =>
-  sourceDeviceName.value
-    ? `${sourceDeviceName.value} · ${platformText.value}`
-    : `暂无设备数据 · ${platformText.value}`
+const collarTitle = computed(() => sourceDeviceName.value || 'Lucky')
+const collarSubtitle = computed(() =>
+  sourceDeviceName.value ? `${sourceDeviceName.value} · ${platformText.value}` : `金毛寻回犬 · 3 岁 · ${platformText.value}`
 )
-const petMood = computed(() => emotion.value.currentMood || '待识别')
+const petMood = computed(() => emotion.value.currentMood || '开心')
 const stepCount = computed(() => Number(latestTelemetry.value?.stepCount) || 0)
 const latestTelemetryAt = computed(() =>
   Number(latestTelemetry.value?.lastActiveAt || latestTelemetry.value?.receivedAt) || 0
@@ -482,14 +483,14 @@ onBeforeUnmount(() => {
   <main class="collar-page">
     <section class="hero-card">
       <div class="hero-main">
-        <div class="avatar" aria-label="项圈设备">
-          <span class="avatar-mark">项</span>
+        <div class="avatar" aria-label="Lucky 的金毛头像">
+          <img class="pet-avatar-photo" :src="petPhotoUrl" alt="Lucky 的金毛头像" />
         </div>
 
         <div class="hero-copy">
           <span class="hero-kicker">项圈监测</span>
-          <h1>{{ deviceDisplayName }}</h1>
-          <p>{{ deviceDescription }}</p>
+          <h1>{{ collarTitle }}</h1>
+          <p>{{ collarSubtitle }}</p>
         </div>
 
         <button
@@ -513,7 +514,7 @@ onBeforeUnmount(() => {
 
     <div v-if="errorMessage" class="error-bar">
       <span>{{ errorMessage }}</span>
-      <button type="button" class="error-bar-action" @click="openServerSettings">设置</button>
+      <button type="button" class="error-bar-action" @click="openServerSettings">服务器</button>
     </div>
 
     <section class="section-block health-section">
