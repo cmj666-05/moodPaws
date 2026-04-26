@@ -34,7 +34,7 @@ const {
   errorMessage,
   latestTelemetry,
   metricSections,
-  mqttMetricMap,
+  metricMap,
   emotion,
   refreshTelemetryBundle,
   refreshEmotionBundle,
@@ -53,7 +53,7 @@ const getMetric = (keys) =>
   computed(() => {
     const keyList = Array.isArray(keys) ? keys : [keys];
     return keyList
-      .map((key) => mqttMetricMap.value[key])
+      .map((key) => metricMap.value[key])
       .find((metric) => metric);
   });
 
@@ -63,7 +63,7 @@ const co2Metric = getMetric(["PetHouse:CO2"]);
 const airQualityMetric = getMetric(["PetHouse:MQ135"]);
 const resolvedVideoStreamUrl = computed(() => getVideoStreamUrl());
 const hasTelemetryData = computed(() =>
-  Boolean(metricSections.value.length || Object.keys(mqttMetricMap.value).length),
+  Boolean(metricSections.value.length),
 );
 
 function scheduleDeferredTask(callback, timeout = 240) {

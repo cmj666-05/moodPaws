@@ -88,14 +88,14 @@
 ### 当前统一字段解析
 当前按历史可工作方案，统一从 `payload.items` 解析字段。
 
-环境字段：
-- `PetHouse:Temp`：温度
+宠舍字段：
+- `PetHouse:Temp`：宠舍温度
 - `PetHouse:Humi`：湿度
 - `PetHouse:MQ135`：MQ135 传感器值
 - `PetHouse:CO2`：CO2
 - `PetHouse:CH2O`：甲醛
 - `PetHouse:VOC`：VOC
-- `PetHouse:Weight`：重量
+- `PetHouse:Weight`：体重
 
 项圈扩展字段（如果 petInfo 聚合消息里携带）：
 - `Collar:XYZ` -> `X/Y/Z`

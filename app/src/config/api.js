@@ -26,15 +26,15 @@ const VIDEO_DISCOVERY_TIMEOUT_MS = Number(import.meta.env.VITE_VIDEO_DISCOVERY_T
 
 const explicitBaseUrl = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL || '')
 const defaultBaseUrl = resolveDefaultBaseUrl()
-const manualBaseUrl = explicitBaseUrl ? '' : loadManualBaseUrl()
-const manualVideoStreamUrl = explicitVideoStreamUrl ? '' : loadManualVideoStreamUrl()
+const manualBaseUrl = loadManualBaseUrl()
+const manualVideoStreamUrl = loadManualVideoStreamUrl()
 const cachedBaseUrl = explicitBaseUrl || manualBaseUrl ? '' : loadStoredBaseUrl()
 const defaultVideoConfig = createVideoConfig()
 const initialVideoConfig = createStoredVideoConfig()
 
 const apiState = reactive({
-  baseUrl: explicitBaseUrl || manualBaseUrl || cachedBaseUrl || defaultBaseUrl,
-  source: explicitBaseUrl ? 'env' : manualBaseUrl ? 'manual' : cachedBaseUrl ? 'cache' : 'default',
+  baseUrl: manualBaseUrl || explicitBaseUrl || cachedBaseUrl || defaultBaseUrl,
+  source: manualBaseUrl ? 'manual' : explicitBaseUrl ? 'env' : cachedBaseUrl ? 'cache' : 'default',
   discoveryState: explicitBaseUrl || manualBaseUrl ? 'manual' : 'idle',
   lastError: '',
   lastResolvedAt: 0,
@@ -45,7 +45,7 @@ const apiState = reactive({
   manualBaseUrl,
   isManualOverride: Boolean(manualBaseUrl),
   isEnvOverride: Boolean(explicitBaseUrl),
-  canEditBaseUrl: !explicitBaseUrl,
+  canEditBaseUrl: true,
   video: { ...initialVideoConfig }
 })
 
@@ -85,10 +85,6 @@ export function getVideoState() {
 export function getVideoStreamUrl() {
   if (!apiState.video?.enabled) {
     return ''
-  }
-
-  if (explicitVideoStreamUrl) {
-    return explicitVideoStreamUrl
   }
 
   return resolveVideoUrlFromParts(apiState.video)
@@ -282,10 +278,6 @@ export function testVideoStreamUrl(videoInput) {
 }
 
 export async function saveManualApiBaseUrl(baseUrl) {
-  if (explicitBaseUrl) {
-    throw new Error('当前构建已通过环境变量固定服务器地址，不能在应用内修改')
-  }
-
   const result = await testApiBaseUrl(baseUrl)
   const resolvedBaseUrl = normalizeBaseUrl(result.baseUrl)
 
@@ -320,10 +312,6 @@ export async function saveManualApiBaseUrl(baseUrl) {
 }
 
 export function saveManualVideoStreamUrl(videoInput) {
-  if (explicitVideoStreamUrl) {
-    throw new Error('当前构建已通过环境变量固定视频地址，不能在应用内修改')
-  }
-
   const result = testVideoStreamUrl(videoInput)
   persistManualVideoStreamUrl(result.url)
 
@@ -349,10 +337,6 @@ export function saveManualVideoStreamUrl(videoInput) {
 }
 
 export function clearManualApiBaseUrl() {
-  if (explicitBaseUrl) {
-    return getApiState()
-  }
-
   const nextVideoConfig =
     apiState.video?.source === 'manual' && apiState.video?.manualUrl
       ? { ...apiState.video }
@@ -361,9 +345,9 @@ export function clearManualApiBaseUrl() {
   clearStoredManualBaseUrl()
   apiState.manualBaseUrl = ''
   apiState.isManualOverride = false
-  apiState.baseUrl = defaultBaseUrl
-  apiState.source = 'default'
-  apiState.discoveryState = 'idle'
+  apiState.baseUrl = explicitBaseUrl || defaultBaseUrl
+  apiState.source = explicitBaseUrl ? 'env' : 'default'
+  apiState.discoveryState = explicitBaseUrl ? 'manual' : 'idle'
   apiState.lastError = ''
   apiState.lastResolvedAt = 0
   apiState.lastDiscoveryAt = 0
@@ -377,10 +361,6 @@ export function clearManualApiBaseUrl() {
 }
 
 export function clearManualVideoStreamUrl() {
-  if (explicitVideoStreamUrl) {
-    return getVideoState()
-  }
-
   clearStoredManualVideoStreamUrl()
   apiState.video = {
     ...createStoredVideoConfig({ includeManual: false }),
@@ -628,7 +608,7 @@ function applyResolvedVideoCandidate(candidate) {
     lastServiceName: candidate.serviceName || apiState.video.lastServiceName || '',
     manualUrl: candidate.source === 'manual' ? resolvedUrl : apiState.video.manualUrl || '',
     isEnvOverride: Boolean(explicitVideoStreamUrl),
-    canEditUrl: !explicitVideoStreamUrl
+    canEditUrl: true
   }
 
   return resolvedUrl
@@ -808,7 +788,7 @@ function resolveVideoConfig(candidate, health) {
     lastResolvedAt: hasEndpoint ? Date.now() : 0,
     lastServiceName: candidate?.serviceName || health?.discovery?.serviceName || '',
     isEnvOverride: Boolean(explicitVideoStreamUrl),
-    canEditUrl: !explicitVideoStreamUrl
+    canEditUrl: true
   }
 }
 
@@ -852,7 +832,7 @@ function mergeVideoConfig(current, incoming) {
       : incoming.lastServiceName || current.lastServiceName || '',
     manualUrl: incoming.manualUrl ?? current.manualUrl ?? '',
     isEnvOverride: Boolean(explicitVideoStreamUrl),
-    canEditUrl: !explicitVideoStreamUrl
+    canEditUrl: true
   }
 }
 
@@ -1077,26 +1057,13 @@ function createVideoConfig(overrides = {}) {
     lastServiceName: '',
     manualUrl: '',
     isEnvOverride: Boolean(explicitVideoStreamUrl),
-    canEditUrl: !explicitVideoStreamUrl,
+    canEditUrl: true,
     ...overrides
   }
 }
 
 function createStoredVideoConfig(options = {}) {
   const includeManual = options.includeManual !== false
-
-  if (explicitVideoStreamUrl) {
-    return createVideoConfig({
-      url: explicitVideoStreamUrl,
-      port: getPortFromUrl(explicitVideoStreamUrl, getDefaultVideoPort()),
-      path: getPathFromUrl(explicitVideoStreamUrl, VIDEO_STREAM_PATH),
-      source: 'env',
-      discoveryState: 'manual',
-      lastResolvedAt: Date.now(),
-      isEnvOverride: true,
-      canEditUrl: false
-    })
-  }
 
   if (includeManual && manualVideoStreamUrl) {
     return createVideoConfig({
@@ -1107,6 +1074,18 @@ function createStoredVideoConfig(options = {}) {
       discoveryState: 'manual',
       lastResolvedAt: Date.now(),
       manualUrl: manualVideoStreamUrl
+    })
+  }
+
+  if (explicitVideoStreamUrl) {
+    return createVideoConfig({
+      url: explicitVideoStreamUrl,
+      port: getPortFromUrl(explicitVideoStreamUrl, getDefaultVideoPort()),
+      path: getPathFromUrl(explicitVideoStreamUrl, VIDEO_STREAM_PATH),
+      source: 'env',
+      discoveryState: 'manual',
+      lastResolvedAt: Date.now(),
+      isEnvOverride: true
     })
   }
 

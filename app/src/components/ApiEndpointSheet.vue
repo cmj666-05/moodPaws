@@ -40,18 +40,11 @@ const sourceLabel = computed(() => {
   return labelMap[apiState.source] || apiState.source || "未知来源";
 });
 
-const showRestoreButton = computed(
-  () => apiState.canEditBaseUrl && apiState.isManualOverride,
-);
-const isEnvLocked = computed(() => apiState.isEnvOverride);
+const showRestoreButton = computed(() => apiState.isManualOverride);
 const currentAddress = computed(() => apiState.baseUrl || "");
-const isVideoEnvLocked = computed(() => Boolean(apiState.video?.isEnvOverride));
 const currentVideoAddress = computed(() => getVideoStreamUrl() || "");
 const showVideoRestoreButton = computed(() =>
-  Boolean(apiState.video?.canEditUrl && apiState.video?.manualUrl),
-);
-const canSaveChanges = computed(
-  () => !isEnvLocked.value || !isVideoEnvLocked.value,
+  Boolean(apiState.video?.manualUrl),
 );
 
 watch(
@@ -143,23 +136,17 @@ async function handleSave() {
     const trimmedApiUrl = draftUrl.value.trim();
     const trimmedVideoUrl = draftVideoUrl.value.trim();
 
-    if (
-      !isEnvLocked.value &&
-      trimmedApiUrl &&
-      trimmedApiUrl !== currentAddress.value
-    ) {
+    if (trimmedApiUrl && trimmedApiUrl !== currentAddress.value) {
       const result = await saveManualApiBaseUrl(trimmedApiUrl);
       savedMessages.push(`后端已切换到：${result.baseUrl}`);
     }
 
-    if (!isVideoEnvLocked.value) {
-      if (trimmedVideoUrl) {
-        const result = saveManualVideoStreamUrl(trimmedVideoUrl);
-        savedMessages.push(`视频流已切换到：${result.url}`);
-      } else if (showVideoRestoreButton.value) {
-        clearManualVideoStreamUrl();
-        savedMessages.push("已清空视频流地址");
-      }
+    if (trimmedVideoUrl) {
+      const result = saveManualVideoStreamUrl(trimmedVideoUrl);
+      savedMessages.push(`视频流已切换到：${result.url}`);
+    } else if (showVideoRestoreButton.value) {
+      clearManualVideoStreamUrl();
+      savedMessages.push("已清空视频流地址");
     }
 
     if (!savedMessages.length) {
@@ -257,14 +244,11 @@ function handleVideoReset() {
             class="endpoint-sheet-input"
             type="url"
             inputmode="url"
-            :disabled="isEnvLocked"
+            :disabled="isTesting || isSaving || isResetting"
             placeholder="http://10.8.34.150:3001/api"
           />
           <p class="endpoint-sheet-help">
             填写完整地址，推荐格式：`http://你的电脑IP:3001/api`
-          </p>
-          <p v-if="isEnvLocked" class="endpoint-sheet-help">
-            当前构建已通过 `.env` 固定服务器地址，应用内修改已禁用。
           </p>
 
           <label
@@ -278,12 +262,9 @@ function handleVideoReset() {
             class="endpoint-sheet-input"
             type="url"
             inputmode="url"
-            :disabled="isVideoEnvLocked"
+            :disabled="isTesting || isSaving || isResetting"
             placeholder="如 http://192.168.1.88:5000"
           />
-          <p v-if="isVideoEnvLocked" class="endpoint-sheet-help">
-            当前构建已通过 `.env` 固定视频地址，应用内修改已禁用。
-          </p>
 
           <div
             v-if="statusMessage"
@@ -301,7 +282,7 @@ function handleVideoReset() {
           <button
             type="button"
             class="endpoint-sheet-btn secondary"
-            :disabled="isTesting || isSaving || isResetting || isEnvLocked"
+            :disabled="isTesting || isSaving || isResetting"
             @click="handleTest"
           >
             {{ isTesting ? "测试中..." : "测试连接" }}
@@ -309,7 +290,7 @@ function handleVideoReset() {
           <button
             type="button"
             class="endpoint-sheet-btn primary"
-            :disabled="isTesting || isSaving || isResetting || !canSaveChanges"
+            :disabled="isTesting || isSaving || isResetting"
             @click="handleSave"
           >
             {{ isSaving ? "保存中..." : "保存并使用" }}

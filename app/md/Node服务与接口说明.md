@@ -170,6 +170,14 @@ CORS_ORIGIN=*
 当前主要指标包括：
 
 - `EmotionState`
+- `PetHouse:Temp`
+- `PetHouse:Humi`
+- `PetHouse:MQ135`
+- `PetHouse:CO2`
+- `PetHouse:CH2O`
+- `PetHouse:VOC`
+- `PetHouse:Weight`
+- `PetHouse:Mood`
 - `Collar:temp`
 - `Collar:GPS.Longitude`
 - `Collar:GPS.Latitude`
@@ -187,7 +195,7 @@ CORS_ORIGIN=*
 - `4` -> `lonely` -> `孤独`
 - `5` -> `sad` -> `难过`
 
-> 当前解析规则以真实设备字段为准，不再兼容旧的 `PetHouse:*`、`Collar:XYZ`、`Collar:XKXY` 指标名。
+> 当前解析规则以真实设备字段为准。已收到的真实 `PetHouse:*` 字段用于宠舍环境、体重与宠舍情绪展示；`Collar:*` 字段用于宠物温度、定位、姿态、心率与血氧展示。旧的 `Collar:XYZ`、`Collar:XKXY` 指标名不再作为主流程字段。
 
 ### 5.3 emotion_snapshots
 
@@ -230,16 +238,33 @@ CORS_ORIGIN=*
 - `4` -> `lonely` -> `孤独`
 - `5` -> `sad` -> `难过`
 
-### 6.2 Collar 字段
+### 6.2 PetHouse 字段
+
+从 `payload.items` 中直接读取：
+
+- `PetHouse:Temp`：宠舍环境温度，单位 `°C`
+- `PetHouse:Humi`：宠舍湿度，单位 `%`
+- `PetHouse:MQ135`：空气质量传感器值
+- `PetHouse:CO2`：CO2 浓度，单位 `ppm`
+- `PetHouse:CH2O`：甲醛传感器值
+- `PetHouse:VOC`：VOC 传感器值
+- `PetHouse:Weight`：体重，单位 `kg`
+- `PetHouse:Mood`：宠舍情绪枚举值，映射规则与 `EmotionState` 一致
+
+> 注意：`PetHouse:Temp` 是宠舍环境温度；`Collar:temp` 是宠物贴身温度，两个字段不要混用。
+
+### 6.3 Collar 字段
 
 如果 `petInfo` 聚合消息中包含项圈数据，则继续拆分。当前后端只解析真实设备字段名：
 
 - `Collar:BNO085` -> `Collar:BNO085.X` / `Collar:BNO085.Y` / `Collar:BNO085.Z`
 - `Collar:GPS` -> `Collar:GPS.Longitude` / `Collar:GPS.Latitude`
 - `Collar:MAX30102` -> `Collar:MAX30102.HeartRate` / `Collar:MAX30102.SPO2`
-- `Collar:temp` -> `Collar:temp`
+- `Collar:temp` -> `Collar:temp`（宠物贴身温度）
 
-### 6.3 真实上报样例
+其中 `Collar:MAX30102.HeartRate` 与 `Collar:MAX30102.SPO2` 只应展示正数有效值；如果收到 `-1` 这类设备无效哨兵值，原始消息仍保存到 `mqtt_messages`，但展示指标与历史曲线应忽略该点并回退到最近一次有效值。
+
+### 6.4 真实上报样例
 
 当前解析和入库以以下真实设备 payload 字段为准。
 
@@ -266,6 +291,65 @@ CORS_ORIGIN=*
 入库指标：
 
 - `EmotionState`：情绪枚举值，`1` 会映射为 `生气`
+
+#### PetHouse 环境与体重上报
+
+```json
+{
+  "deviceType": "CustomCategory",
+  "iotId": "R5uUcVnhywxOohTc1TtVk1wxa0",
+  "requestId": "1776993293172",
+  "checkFailedData": {},
+  "productKey": "k1wxaEnEO8L",
+  "gmtCreate": 1776993291770,
+  "deviceName": "Collar",
+  "items": {
+    "PetHouse:Mood": {
+      "time": 1776993291737,
+      "value": 3
+    },
+    "PetHouse:Humi": {
+      "time": 1776993291737,
+      "value": 88
+    },
+    "PetHouse:Weight": {
+      "time": 1776993291737,
+      "value": 24
+    },
+    "PetHouse:CO2": {
+      "time": 1776993291737,
+      "value": 411
+    },
+    "PetHouse:CH2O": {
+      "time": 1776993291737,
+      "value": 2
+    },
+    "PetHouse:Temp": {
+      "time": 1776993291737,
+      "value": 36
+    },
+    "PetHouse:VOC": {
+      "time": 1776993291737,
+      "value": 1
+    },
+    "PetHouse:MQ135": {
+      "time": 1776993291737,
+      "value": 51
+    }
+  }
+}
+```
+
+入库指标：
+
+- `PetHouse:Temp`：宠舍环境温度
+- `PetHouse:Humi`：宠舍湿度
+- `PetHouse:MQ135`：空气质量传感器值
+- `PetHouse:CO2`：CO2 浓度
+- `PetHouse:CH2O`：甲醛传感器值
+- `PetHouse:VOC`：VOC 传感器值
+- `PetHouse:Weight`：体重
+- `PetHouse:Mood`：宠舍情绪枚举值
 
 #### Collar 项圈上报
 
@@ -318,16 +402,59 @@ CORS_ORIGIN=*
 - `Collar:BNO085.Z`：三轴 Z
 - `Collar:MAX30102.HeartRate`：心率
 - `Collar:MAX30102.SPO2`：血氧
-- `Collar:temp`：项圈温度
+- `Collar:temp`：宠物贴身温度
 
-### 6.4 来源设备识别
+#### Collar 心率/血氧无效值样例
+
+实际联调中可能收到以下 payload：
+
+```json
+{
+  "deviceType": "CustomCategory",
+  "iotId": "R5uUcVnhywxOohTc1TtVk1wxa0",
+  "requestId": "27241",
+  "checkFailedData": {},
+  "productKey": "k1wxaEnEO8L",
+  "gmtCreate": 1777015387553,
+  "deviceName": "Collar",
+  "items": {
+    "Collar:BNO085": {
+      "time": 1777015387546,
+      "value": {
+        "X": 10.47,
+        "Y": 71.74,
+        "Z": -12.25
+      }
+    },
+    "Collar:MAX30102": {
+      "time": 1777015387546,
+      "value": {
+        "HeartRate": -1,
+        "SPO2": -1
+      }
+    },
+    "Collar:temp": {
+      "time": 1777015387546,
+      "value": 26.9375
+    }
+  }
+}
+```
+
+处理规则：
+
+- `mqtt_messages` 保存完整原始消息，方便追踪设备/平台返回内容。
+- `metric_points` 不应把 `HeartRate = -1`、`SPO2 = -1` 当作有效展示指标。
+- `/api/telemetry/latest` 和历史曲线应使用最近一次正数有效心率/血氧值。
+
+### 6.5 来源设备识别
 
 优先使用 payload 中的 `deviceName` 识别真实来源设备，例如：
 
 - `Collar`
 - `DogHouse`
 
-### 6.5 输出结果
+### 6.6 输出结果
 
 解析后会生成两类数据：
 
@@ -366,7 +493,8 @@ CORS_ORIGIN=*
 补充说明：
 
 - 页面展示用的 `sections` 会先合并最近一条 `device_name = Collar` 与 `device_name = DogHouse` 的消息。
-- 如果某个指标在这两条最新消息里缺失，服务端会再用 `metric_points` 中该指标最近一次有效值回填，避免首页因为不同设备上报时间错开而出现心率、体重二选一掉值。
+- 如果某个指标在这两条最新消息里缺失，服务端会再用 `metric_points` 中该指标最近一次有效值回填，避免首页因为不同设备上报时间错开而出现心率、血氧、体重、环境数据互相掉值。
+- `Collar:MAX30102.HeartRate`、`Collar:MAX30102.SPO2` 遇到 `-1` 等非正数时视为无效采样，不覆盖最近一次有效展示值。
 - `receivedAt` 与 `topic` 反映最近一条总体 telemetry 消息时间，可用于判断链路是否持续有新消息。
 - `stepCount` 由服务端根据最近一段 `X/Y/Z` 历史样本按首页原有口径计算：先计算三轴模长，再在相邻样本模长差值大于阈值 `1.2` 时计一步。
 

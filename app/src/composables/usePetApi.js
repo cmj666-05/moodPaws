@@ -3,16 +3,6 @@ import { apiConfig, fetchApiJson } from '../config/api'
 
 const HEART_RATE_METRIC_KEY = 'Collar:MAX30102.HeartRate'
 const HEART_RATE_HISTORY_LIMIT = 30
-const MQTT_RAW_METRIC_DEFINITIONS = {
-  'PetHouse:Temp': { label: 'PetHouse Temp', unit: '°C' },
-  'PetHouse:Humi': { label: 'PetHouse Humidity', unit: '%' },
-  'PetHouse:MQ135': { label: 'PetHouse Air Quality', unit: '' },
-  'PetHouse:CO2': { label: 'PetHouse CO2', unit: 'ppm' },
-  'PetHouse:CH2O': { label: 'PetHouse CH2O', unit: '' },
-  'PetHouse:VOC': { label: 'PetHouse VOC', unit: '' },
-  'PetHouse:Weight': { label: 'PetHouse Weight', unit: 'kg' },
-  'PetHouse:Mood': { label: 'PetHouse Mood', unit: '' }
-}
 
 const loading = ref(false)
 const telemetryLoading = ref(false)
@@ -75,13 +65,12 @@ export function usePetApi() {
 
   const metricSections = computed(() => latestTelemetry.value.sections || [])
   const metricMap = computed(() => createMetricMap(metricSections.value))
-  const mqttMetricMap = computed(() => createMqttMetricMap(latestTelemetry.value.raw))
   const homeMetrics = computed(() => ({
     emotionState: metricMap.value.EmotionState,
     collarTemp: metricMap.value['Collar:temp'],
     heartRate: metricMap.value[HEART_RATE_METRIC_KEY],
     spo2: metricMap.value['Collar:MAX30102.SPO2'],
-    weight: mqttMetricMap.value['PetHouse:Weight'],
+    weight: metricMap.value['PetHouse:Weight'],
     longitude: metricMap.value['Collar:GPS.Longitude'],
     latitude: metricMap.value['Collar:GPS.Latitude'],
     motionX: metricMap.value['Collar:BNO085.X'],
@@ -350,7 +339,6 @@ export function usePetApi() {
     sourceSummary,
     metricSections,
     metricMap,
-    mqttMetricMap,
     homeMetrics,
     rawPayloadText,
     statusText,
@@ -379,42 +367,6 @@ function createMetricMap(sections = []) {
       result[metric.key] = metric
       return result
     }, {})
-}
-
-function createMqttMetricMap(raw = null) {
-  const rawItems = raw?.items && typeof raw.items === 'object' ? raw.items : {}
-
-  return Object.entries(MQTT_RAW_METRIC_DEFINITIONS).reduce((result, [metricKey, definition]) => {
-    const rawItem = rawItems[metricKey]
-    const value = getRawMetricValue(rawItem)
-
-    if (value === undefined || value === null || value === '') {
-      return result
-    }
-
-    result[metricKey] = {
-      key: metricKey,
-      label: definition.label,
-      unit: definition.unit,
-      value,
-      time: getRawMetricTime(rawItem)
-    }
-
-    return result
-  }, {})
-}
-
-function getRawMetricValue(rawItem) {
-  if (rawItem && typeof rawItem === 'object' && 'value' in rawItem) {
-    return rawItem.value
-  }
-
-  return rawItem
-}
-
-function getRawMetricTime(rawItem) {
-  const time = Number(rawItem?.time)
-  return Number.isFinite(time) ? time : null
 }
 
 function mergeMetricSections(previousSections = [], nextSections = []) {

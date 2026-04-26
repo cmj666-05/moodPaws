@@ -2,6 +2,11 @@ import { env } from '../../config/env.js'
 import { getMemoryState } from '../memory-store.js'
 import { all, get, run } from '../sqlite.js'
 
+const POSITIVE_ONLY_METRICS = new Set([
+  'Collar:MAX30102.HeartRate',
+  'Collar:MAX30102.SPO2'
+])
+
 export async function insertMessage({
   topic,
   deviceName,
@@ -69,6 +74,10 @@ export async function insertMetricPoints(messageId, metricPoints) {
     let nextId = (state.metricPoints.at(-1)?.id ?? 0) + 1
 
     for (const point of metricPoints) {
+      if (!isValidMetricPoint(point.metricKey, point.valueNum)) {
+        continue
+      }
+
       state.metricPoints.push({
         id: nextId,
         message_id: messageId,
@@ -84,6 +93,10 @@ export async function insertMetricPoints(messageId, metricPoints) {
   }
 
   for (const point of metricPoints) {
+    if (!isValidMetricPoint(point.metricKey, point.valueNum)) {
+      continue
+    }
+
     await run(
       `INSERT INTO metric_points (message_id, metric_key, item_key, value_num, value_text, ts)
        VALUES (?, ?, ?, ?, ?, ?)`,
@@ -137,6 +150,7 @@ export function listLatestMetricPoints(metricKeys) {
       .map((metricKey) =>
         [...state.metricPoints]
           .filter((row) => row.metric_key === metricKey)
+          .filter((row) => isValidMetricPoint(row.metric_key, row.value_num))
           .sort((a, b) => b.ts - a.ts)[0]
       )
       .filter(Boolean)
@@ -149,10 +163,18 @@ export function listLatestMetricPoints(metricKeys) {
     `SELECT metric_key, value_num, value_text, ts
      FROM metric_points AS current
      WHERE current.metric_key IN (${placeholders})
+       AND NOT (
+         current.metric_key IN ('Collar:MAX30102.HeartRate', 'Collar:MAX30102.SPO2')
+         AND (current.value_num IS NULL OR current.value_num <= 0)
+       )
        AND current.ts = (
          SELECT MAX(latest.ts)
          FROM metric_points AS latest
          WHERE latest.metric_key = current.metric_key
+           AND NOT (
+             latest.metric_key IN ('Collar:MAX30102.HeartRate', 'Collar:MAX30102.SPO2')
+             AND (latest.value_num IS NULL OR latest.value_num <= 0)
+           )
        )
      ORDER BY current.ts DESC`,
     metricKeys
@@ -192,8 +214,22 @@ export function listMetricHistory(metricKey, limit) {
     return Promise.resolve(
       [...state.metricPoints]
         .filter((row) => row.metric_key === metricKey)
+        .filter((row) => isValidMetricPoint(row.metric_key, row.value_num))
         .sort((a, b) => b.ts - a.ts)
         .slice(0, limit)
+    )
+  }
+
+  if (POSITIVE_ONLY_METRICS.has(metricKey)) {
+    return all(
+      `SELECT metric_key, value_num, value_text, ts
+       FROM metric_points
+       WHERE metric_key = ?
+         AND value_num IS NOT NULL
+         AND value_num > 0
+       ORDER BY ts DESC
+       LIMIT ?`,
+      [metricKey, limit]
     )
   }
 
@@ -280,4 +316,13 @@ export function listRecentMotionSamples(limit) {
      LIMIT ?`,
     [limit]
   )
+}
+
+function isValidMetricPoint(metricKey, valueNum) {
+  if (!POSITIVE_ONLY_METRICS.has(metricKey)) {
+    return true
+  }
+
+  const parsed = Number(valueNum)
+  return Number.isFinite(parsed) && parsed > 0
 }

@@ -18,6 +18,14 @@ const TRACK_WINDOW_MS = 24 * 60 * 60 * 1000
 const ONLINE_WINDOW_MS = 60 * 1000
 const TELEMETRY_METRIC_KEYS = [
   'EmotionState',
+  'PetHouse:Temp',
+  'PetHouse:Humi',
+  'PetHouse:MQ135',
+  'PetHouse:CO2',
+  'PetHouse:CH2O',
+  'PetHouse:VOC',
+  'PetHouse:Weight',
+  'PetHouse:Mood',
   'Collar:temp',
   'Collar:GPS.Longitude',
   'Collar:GPS.Latitude',
@@ -126,11 +134,12 @@ export async function getLatestEmotion() {
   const [latestHouseMessage, latestMessage, latestMoodRows] = await Promise.all([
     getLatestMessageByDeviceName(HOUSE_DEVICE),
     getLatestMessage(),
-    listLatestMetricPoints(['EmotionState'])
+    listLatestMetricPoints(['EmotionState', 'PetHouse:Mood'])
   ])
   const moodMetric =
     extractLatestEmotionMetric(latestHouseMessage) ||
     extractLatestEmotionMetric(latestMessage) ||
+    extractMoodFromMetricPoint(latestMoodRows.find((row) => row.metric_key === 'EmotionState')) ||
     extractMoodFromMetricPoint(latestMoodRows[0])
   const telemetryMood = moodMetric
     ? getMoodLabel(moodMetric.valueNum ?? moodMetric.rawValue ?? moodMetric.value)
@@ -172,7 +181,9 @@ function extractLatestEmotionMetric(message) {
   }
 
   const parsed = parsePayloadObject(JSON.parse(message.payload_json), message.topic)
-  return parsed.metricPoints.find((metric) => metric.metricKey === 'EmotionState') || null
+  return parsed.metricPoints.find((metric) => metric.metricKey === 'EmotionState') ||
+    parsed.metricPoints.find((metric) => metric.metricKey === 'PetHouse:Mood') ||
+    null
 }
 
 function extractMoodFromMetricPoint(row) {
