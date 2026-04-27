@@ -191,7 +191,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  max-height: 210px;
+  height: 220px;
 }
 
 .section-heading {
@@ -222,7 +222,7 @@
   min-height: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: minmax(0, 0.92fr) minmax(0, 0.78fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 0.78fr);
   gap: 7px;
   align-items: stretch;
 }

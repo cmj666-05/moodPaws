@@ -13,6 +13,7 @@ export function createMqttSubscriber(handlers = {}) {
     clientId: env.mqtt.clientId,
     username: env.mqtt.username,
     password: env.mqtt.password,
+    rejectUnauthorized: env.mqtt.rejectUnauthorized,
     reconnectPeriod: env.mqtt.reconnectPeriod,
     connectTimeout: env.mqtt.connectTimeout,
     protocolVersion: env.mqtt.protocolVersion,
