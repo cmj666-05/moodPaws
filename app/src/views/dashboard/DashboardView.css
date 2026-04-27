@@ -203,7 +203,7 @@
 }
 
 .env-card {
-  min-height: 76px;
+  min-height: 110px;
   padding: 8px 10px;
   border: 1px solid rgba(95, 76, 55, 0.08);
   border-radius: 17px;
@@ -228,7 +228,7 @@
 
 .air-quality-combined {
   grid-column: 1 / -1;
-  min-height: 68px;
+  min-height: 125px;
   flex-direction: row;
   align-items: stretch;
   gap: 10px;
@@ -249,13 +249,13 @@
 .env-sub-label,
 .env-label {
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 700;
 }
 
 .env-icon {
-  width: 22px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
   border-radius: 11px;
   display: flex;
   align-items: center;
@@ -263,8 +263,8 @@
 }
 
 .env-icon svg {
-  width: 13px;
-  height: 13px;
+  width: 20px;
+  height: 20px;
 }
 
 .env-icon-temperature {
@@ -295,7 +295,7 @@
   color: var(--color-text-muted);
   font-size: 11px;
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.5;
 }
 
 .live-view {
@@ -310,7 +310,7 @@
 .video-placeholder {
   width: 100%;
   aspect-ratio: 4 / 3;
-  min-height: 238px;
+  min-height: 288px;
   background:
     radial-gradient(circle at 28% 24%, rgba(255, 255, 255, 0.36), transparent 28%),
     linear-gradient(135deg, #d89a67 0%, #98b780 100%);

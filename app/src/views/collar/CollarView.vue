@@ -512,10 +512,7 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <div v-if="errorMessage" class="error-bar">
-      <span>{{ errorMessage }}</span>
-      <button type="button" class="error-bar-action" @click="openServerSettings">服务器</button>
-    </div>
+    
 
     <section class="section-block health-section">
       <div class="section-heading">
