@@ -14,6 +14,8 @@ function createEmptyEmotionState() {
     source: '',
     currentMood: '',
     score: null,
+    summary: '',
+    suggestions: [],
     voice: { frequency: [], tone: [] },
     fluctuation: { timeline: [], values: [] },
     history: [],
@@ -128,7 +130,10 @@ export function usePetApi() {
       retryDiscovery: options.retryDiscovery !== false
     })
 
-    locationTrack.value = Array.isArray(payload?.points) ? payload.points : []
+    locationTrack.value = mergeLocationTrackPoints(
+      locationTrack.value,
+      Array.isArray(payload?.points) ? payload.points : []
+    )
   }
 
   async function refreshEmotion(options = {}) {
@@ -141,6 +146,8 @@ export function usePetApi() {
         source: typeof data.source === 'string' ? data.source : '',
         currentMood: typeof data.currentMood === 'string' ? data.currentMood : '',
         score: Number.isFinite(Number(data.score)) ? Number(data.score) : null,
+        summary: typeof data.summary === 'string' ? data.summary : '',
+        suggestions: Array.isArray(data.suggestions) ? data.suggestions : [],
         voice: {
           frequency: Array.isArray(data.voice?.frequency) ? data.voice.frequency : [],
           tone: Array.isArray(data.voice?.tone) ? data.voice.tone : []
@@ -455,7 +462,7 @@ function appendLatestLocationPoint(telemetry) {
     return
   }
 
-  locationTrack.value = [...history, nextPoint].slice(-MAX_TRACK_POINTS)
+  locationTrack.value = mergeLocationTrackPoints(history, [nextPoint])
 }
 
 function isSameCoordinatePoint(firstPoint, secondPoint) {
@@ -465,6 +472,47 @@ function isSameCoordinatePoint(firstPoint, secondPoint) {
     Math.abs(Number(firstPoint?.longitude) - Number(secondPoint?.longitude)) <= tolerance &&
     Math.abs(Number(firstPoint?.latitude) - Number(secondPoint?.latitude)) <= tolerance
   )
+}
+
+function normalizeLocationPoint(point) {
+  const longitude = Number(point?.longitude)
+  const latitude = Number(point?.latitude)
+
+  if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+    return null
+  }
+
+  const accuracy = Number(point?.accuracy)
+  const speed = Number(point?.speed)
+  const time = Number(point?.time || point?.createdAt || point?.receivedAt || Date.now())
+
+  return {
+    longitude,
+    latitude,
+    accuracy: Number.isFinite(accuracy) ? accuracy : null,
+    speed: Number.isFinite(speed) ? speed : null,
+    time: Number.isFinite(time) ? time : Date.now()
+  }
+}
+
+function mergeLocationTrackPoints(...tracks) {
+  return tracks
+    .flat()
+    .map(normalizeLocationPoint)
+    .filter(Boolean)
+    .sort((firstPoint, secondPoint) => Number(firstPoint.time) - Number(secondPoint.time))
+    .reduce((result, point) => {
+      const lastPoint = result[result.length - 1]
+
+      if (lastPoint && isSameCoordinatePoint(lastPoint, point)) {
+        result[result.length - 1] = { ...lastPoint, ...point }
+        return result
+      }
+
+      result.push(point)
+      return result
+    }, [])
+    .slice(-MAX_TRACK_POINTS)
 }
 
 function formatTime(value) {

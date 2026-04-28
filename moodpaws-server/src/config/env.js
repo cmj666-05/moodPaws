@@ -60,6 +60,7 @@ export const env = {
     clientId: process.env.MQTT_CLIENT_ID || `moodpaws-server-${process.pid}`,
     username: process.env.MQTT_USERNAME || '',
     password: process.env.MQTT_PASSWORD || '',
+    rejectUnauthorized: toBoolean(process.env.MQTT_REJECT_UNAUTHORIZED, true),
     reconnectPeriod: toNumber(process.env.MQTT_RECONNECT_PERIOD, 3000),
     connectTimeout: toNumber(process.env.MQTT_CONNECT_TIMEOUT, 10000),
     protocolVersion: toNumber(process.env.MQTT_PROTOCOL_VERSION, 4)
