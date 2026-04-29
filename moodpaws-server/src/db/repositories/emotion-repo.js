@@ -13,7 +13,13 @@ export function getLatestEmotionSnapshot() {
      FROM emotion_snapshots
      ORDER BY created_at DESC, id DESC
      LIMIT 1`
-  )
+  ).catch((error) => {
+    if (isMissingEmotionSnapshotTable(error)) {
+      return null
+    }
+
+    throw error
+  })
 }
 
 export async function seedDefaultEmotionSnapshot() {
@@ -50,4 +56,8 @@ export async function seedDefaultEmotionSnapshot() {
   )
 
   return getLatestEmotionSnapshot()
+}
+
+function isMissingEmotionSnapshotTable(error) {
+  return /no such table:\s*emotion_snapshots/i.test(error?.message || '')
 }

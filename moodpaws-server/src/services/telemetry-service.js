@@ -7,7 +7,7 @@ import {
   listRecentMotionSamples,
   listTrackPoints
 } from '../db/repositories/telemetry-repo.js'
-import { getLatestEmotionSnapshot } from '../db/repositories/emotion-repo.js'
+import { enrichEmotionWithAiAdvice } from './deepseek-service.js'
 import { parsePayloadObject } from '../mqtt/parser.js'
 import { getMoodLabel } from '../utils/emotion-mood.js'
 
@@ -132,32 +132,32 @@ export async function getLocationTrack(limit = 1440) {
 }
 
 export async function getLatestEmotion() {
-  const [latestHouseMessage, latestMessage, latestMoodRows, latestSnapshot] = await Promise.all([
+  const [latestHouseMessage, latestMessage, latestMoodRows] = await Promise.all([
     getLatestMessageByDeviceName(HOUSE_DEVICE),
     getLatestMessage(),
-    listLatestMetricPoints(['EmotionState', 'PetHouse:Mood']),
-    getLatestEmotionSnapshot()
+    listLatestMetricPoints(['EmotionState', 'PetHouse:Mood'])
   ])
   const moodMetric =
+    extractMoodFromMetricPoint(latestMoodRows.find((row) => row.metric_key === 'EmotionState')) ||
+    extractMoodFromMetricPoint(latestMoodRows.find((row) => row.metric_key === 'PetHouse:Mood')) ||
     extractLatestEmotionMetric(latestHouseMessage) ||
     extractLatestEmotionMetric(latestMessage) ||
-    extractMoodFromMetricPoint(latestMoodRows.find((row) => row.metric_key === 'EmotionState')) ||
     extractMoodFromMetricPoint(latestMoodRows[0])
   const telemetryMood = moodMetric
     ? getMoodLabel(moodMetric.valueNum ?? moodMetric.rawValue ?? moodMetric.value)
     : null
-  const snapshotPayload = createEmotionPayloadFromSnapshot(latestSnapshot)
-
-  if (!telemetryMood && !snapshotPayload.currentMood) {
-    return snapshotPayload
+  if (!telemetryMood) {
+    return createEmptyEmotionPayload()
   }
 
-  return {
-    ...snapshotPayload,
-    source: telemetryMood ? 'telemetry' : snapshotPayload.source,
-    currentMood: telemetryMood || snapshotPayload.currentMood,
-    createdAt: Number(moodMetric?.ts ?? moodMetric?.time) || snapshotPayload.createdAt
+  const emotionPayload = {
+    ...createEmptyEmotionPayload(),
+    source: 'telemetry',
+    currentMood: telemetryMood,
+    createdAt: Number(moodMetric?.ts ?? moodMetric?.time) || Date.now()
   }
+
+  return enrichEmotionWithAiAdvice(emotionPayload)
 }
 
 function createEmptyEmotionPayload() {
@@ -177,52 +177,6 @@ function createEmptyEmotionPayload() {
     },
     history: [],
     createdAt: null
-  }
-}
-
-function createEmotionPayloadFromSnapshot(snapshot) {
-  const payload = createEmptyEmotionPayload()
-
-  if (!snapshot) {
-    return payload
-  }
-
-  const summary = parseEmotionSummary(snapshot.summary_json)
-
-  return {
-    ...payload,
-    source: typeof snapshot.source === 'string' ? snapshot.source : '',
-    currentMood: typeof snapshot.mood_label === 'string' ? snapshot.mood_label : '',
-    score: Number.isFinite(Number(snapshot.score)) ? Number(snapshot.score) : null,
-    summary: typeof summary.summary === 'string' ? summary.summary : '',
-    suggestions: Array.isArray(summary.suggestions) ? summary.suggestions : [],
-    voice: {
-      frequency: Array.isArray(summary.voice?.frequency) ? summary.voice.frequency : [],
-      tone: Array.isArray(summary.voice?.tone) ? summary.voice.tone : []
-    },
-    fluctuation: {
-      timeline: Array.isArray(summary.fluctuation?.timeline) ? summary.fluctuation.timeline : [],
-      values: Array.isArray(summary.fluctuation?.values) ? summary.fluctuation.values : []
-    },
-    history: Array.isArray(summary.history) ? summary.history : [],
-    createdAt: Number.isFinite(Number(snapshot.created_at)) ? Number(snapshot.created_at) : null
-  }
-}
-
-function parseEmotionSummary(value) {
-  if (!value) {
-    return {}
-  }
-
-  if (typeof value === 'object') {
-    return value
-  }
-
-  try {
-    const parsed = JSON.parse(value)
-    return parsed && typeof parsed === 'object' ? parsed : {}
-  } catch {
-    return {}
   }
 }
 

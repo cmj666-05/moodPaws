@@ -64,5 +64,9 @@ export const env = {
     reconnectPeriod: toNumber(process.env.MQTT_RECONNECT_PERIOD, 3000),
     connectTimeout: toNumber(process.env.MQTT_CONNECT_TIMEOUT, 10000),
     protocolVersion: toNumber(process.env.MQTT_PROTOCOL_VERSION, 4)
+  },
+  deepseek: {
+    apiKey: process.env.DEEPSEEK_API_KEY || '',
+    model: process.env.DEEPSEEK_MODEL || 'deepseek-chat'
   }
 }

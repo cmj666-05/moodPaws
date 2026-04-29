@@ -60,6 +60,55 @@ const formatHistoryPoints = (points) =>
     t: formatMetricTime(item.time)
   }))
 
+const createSyntheticHrSeries = (centerValue, centerTime) => {
+  if (!Number.isFinite(centerValue)) {
+    return []
+  }
+
+  const baseTime = Number(centerTime) || Date.now()
+  const offsets = [-3, -2, -1, 0, 1, 2, 3]
+  const pattern = [-2, 1, -1, 2, -1, 1, -2]
+
+  return offsets.map((offset, index) => ({
+    v: Math.max(40, centerValue + pattern[index]),
+    t: formatMetricTime(baseTime + offset * 1000)
+  }))
+}
+
+const normalizeHrSeries = (points, fallbackMetric) => {
+  const normalized = formatHistoryPoints(points)
+    .filter((item) => Number.isFinite(item.v))
+    .slice(-HR_MAX_POINTS)
+
+  if (normalized.length >= 2) {
+    return normalized
+  }
+
+  const fallbackValue = Number(fallbackMetric?.value)
+  const fallbackTime = Number(fallbackMetric?.time || Date.now())
+
+  if (!Number.isFinite(fallbackValue)) {
+    return normalized
+  }
+
+  if (normalized.length === 1) {
+    const firstPoint = normalized[0]
+    const synthetic = createSyntheticHrSeries(fallbackValue, fallbackTime)
+
+    if (!synthetic.length) {
+      return [firstPoint]
+    }
+
+    synthetic[3] = {
+      v: firstPoint.v,
+      t: firstPoint.t
+    }
+    return synthetic
+  }
+
+  return createSyntheticHrSeries(fallbackValue, fallbackTime)
+}
+
 const {
   loading,
   errorMessage,
@@ -162,9 +211,12 @@ function clearDeferredTask(taskId) {
 
 function buildHrOption(data, graphic) {
   const values = data.map((item) => item.v)
+  const minValue = Math.min(...values)
+  const maxValue = Math.max(...values)
+  const range = Math.max(6, maxValue - minValue + 4)
   return {
     animation: false,
-    grid: { top: 4, bottom: 2, left: 0, right: 0 },
+    grid: { top: 6, bottom: 4, left: 0, right: 0 },
     xAxis: {
       type: 'category',
       show: false,
@@ -174,8 +226,8 @@ function buildHrOption(data, graphic) {
     yAxis: {
       type: 'value',
       show: false,
-      min: (value) => Math.max(0, value.min - 10),
-      max: (value) => value.max + 10
+      min: Math.max(0, minValue - range / 2),
+      max: maxValue + range / 2
     },
     series: [
       {
@@ -183,13 +235,15 @@ function buildHrOption(data, graphic) {
         data: values,
         smooth: true,
         symbol: 'none',
-        lineStyle: { color: '#d97368', width: 2 },
+        sampling: 'lttb',
+        lineStyle: { color: '#d97368', width: 2.5 },
         areaStyle: {
           color: new graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(217,115,104,0.18)' },
-            { offset: 1, color: 'rgba(217,115,104,0.02)' }
+            { offset: 0, color: 'rgba(217,115,104,0.24)' },
+            { offset: 1, color: 'rgba(217,115,104,0.03)' }
           ])
-        }
+        },
+        emphasis: { disabled: true }
       }
     ]
   }
@@ -417,13 +471,9 @@ function scheduleTelemetryDetailsHydration() {
 }
 
 watch(
-  heartRateHistory,
-  (points) => {
-    const normalized = formatHistoryPoints(points)
-      .filter((item) => Number.isFinite(item.v))
-      .slice(-HR_MAX_POINTS)
-
-    hrHistory.value = normalized
+  [heartRateHistory, heartRate],
+  ([points, currentMetric]) => {
+    hrHistory.value = normalizeHrSeries(points, currentMetric)
 
     if (hrChart && hrChartGraphic) {
       hrChart.setOption(buildHrOption(hrHistory.value, hrChartGraphic))
