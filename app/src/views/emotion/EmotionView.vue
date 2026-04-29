@@ -15,31 +15,49 @@ const petPhotoUrl =
 const emotionCatalog = [
   {
     key: "angry",
+    aliases: ["angry", "生气", "愤怒", "烦躁"],
     label: "生气",
     mark: "!",
+    badgeText: "冷静",
     brief: "需要一点距离",
     summary:
       "整体情绪偏紧绷，先减少打扰、降低噪声，给它留一点安静空间会更合适。",
     accent: "#d97368",
     soft: "rgba(217, 115, 104, 0.14)",
-    glow: "rgba(217, 115, 104, 0.22)",
+    glow: "rgba(217, 115, 104, 0.2)",
+    pageTint: "linear-gradient(180deg, #fff7f1 0%, #fff1ec 48%, #fbefe8 100%)",
+    surfaceTint:
+      "linear-gradient(180deg, rgba(255, 253, 248, 0.98) 0%, rgba(255, 244, 238, 0.94) 100%)",
+    badgeFrom: "#e58a7e",
+    badgeTo: "#c95f55",
+    lineFrom: "rgba(217, 115, 104, 0.72)",
+    lineTo: "rgba(244, 177, 134, 0.78)",
     suggestions: [
       { label: "优先动作", value: "先减少打扰，给它一点冷静缓冲时间。", icon: "heart" },
-      { label: "互动方式", value: "不要立刻强贴近，等它主动靠近会更稳。", icon: "gift" },
+      { label: "互动方式", value: "不要立刻强行贴近，等它主动靠近会更稳。", icon: "gift" },
       { label: "环境调整", value: "把周围噪声和陌生刺激先降下来。", icon: "leaf" },
       { label: "观察重点", value: "留意它是否持续紧绷，避免情绪继续升级。", icon: "spark" },
     ],
   },
   {
     key: "anxious",
+    aliases: ["anxious", "焦虑", "紧张", "不安"],
     label: "焦虑",
     mark: "?",
+    badgeText: "安抚",
     brief: "需要稳定感",
     summary:
       "这更像是对环境变化的敏感反应。熟悉的陪伴、稳定节奏和轻声安抚会更有效。",
-    accent: "#e4a14e",
-    soft: "rgba(228, 161, 78, 0.16)",
-    glow: "rgba(228, 161, 78, 0.22)",
+    accent: "#d9953e",
+    soft: "rgba(217, 149, 62, 0.15)",
+    glow: "rgba(217, 149, 62, 0.2)",
+    pageTint: "linear-gradient(180deg, #fff9ed 0%, #fff3df 48%, #f9eddc 100%)",
+    surfaceTint:
+      "linear-gradient(180deg, rgba(255, 253, 248, 0.98) 0%, rgba(255, 247, 232, 0.94) 100%)",
+    badgeFrom: "#e7ae62",
+    badgeTo: "#cf8840",
+    lineFrom: "rgba(217, 149, 62, 0.74)",
+    lineTo: "rgba(239, 195, 104, 0.82)",
     suggestions: [
       { label: "优先动作", value: "先用熟悉声音安抚它，给它稳定感。", icon: "heart" },
       { label: "互动方式", value: "放慢动作，避免突然触碰或催促。", icon: "gift" },
@@ -49,14 +67,23 @@ const emotionCatalog = [
   },
   {
     key: "happy",
+    aliases: ["happy", "开心", "高兴", "愉快"],
     label: "开心",
-    mark: "♪",
+    mark: "✓",
+    badgeText: "活力",
     brief: "状态轻松",
     summary:
       "整体情绪比较积极，现在适合互动、奖励，或者安排一点轻松活动。",
     accent: "#5da974",
-    soft: "rgba(93, 169, 116, 0.16)",
-    glow: "rgba(93, 169, 116, 0.22)",
+    soft: "rgba(93, 169, 116, 0.15)",
+    glow: "rgba(93, 169, 116, 0.2)",
+    pageTint: "linear-gradient(180deg, #f7fbef 0%, #eef7e6 48%, #f8f0df 100%)",
+    surfaceTint:
+      "linear-gradient(180deg, rgba(255, 253, 248, 0.98) 0%, rgba(246, 251, 238, 0.94) 100%)",
+    badgeFrom: "#72b77d",
+    badgeTo: "#5a9f68",
+    lineFrom: "rgba(93, 169, 116, 0.72)",
+    lineTo: "rgba(169, 210, 147, 0.82)",
     suggestions: [
       { label: "优先动作", value: "现在适合安排一点互动或轻松小游戏。", icon: "heart" },
       { label: "互动方式", value: "可以配合夸奖和小奖励，强化好情绪。", icon: "gift" },
@@ -66,14 +93,23 @@ const emotionCatalog = [
   },
   {
     key: "lonely",
+    aliases: ["lonely", "孤独", "寂寞", "想陪伴"],
     label: "孤独",
     mark: ".",
+    badgeText: "陪伴",
     brief: "等待回应",
     summary:
       "它更像是在等反馈和陪伴，适当增加互动频率，通常比单纯放着更有效。",
     accent: "#6d9fc1",
-    soft: "rgba(109, 159, 193, 0.16)",
-    glow: "rgba(109, 159, 193, 0.22)",
+    soft: "rgba(109, 159, 193, 0.15)",
+    glow: "rgba(109, 159, 193, 0.2)",
+    pageTint: "linear-gradient(180deg, #f1f8fb 0%, #e8f2f7 48%, #f5efe4 100%)",
+    surfaceTint:
+      "linear-gradient(180deg, rgba(255, 253, 248, 0.98) 0%, rgba(239, 248, 252, 0.94) 100%)",
+    badgeFrom: "#78afd0",
+    badgeTo: "#4f8eb7",
+    lineFrom: "rgba(109, 159, 193, 0.72)",
+    lineTo: "rgba(157, 203, 222, 0.82)",
     suggestions: [
       { label: "优先动作", value: "先给一点明确回应，叫名字也会有帮助。", icon: "heart" },
       { label: "互动方式", value: "安排几分钟陪玩或贴近陪伴。", icon: "gift" },
@@ -83,14 +119,23 @@ const emotionCatalog = [
   },
   {
     key: "sad",
+    aliases: ["sad", "难过", "低落", "沮丧"],
     label: "难过",
     mark: "~",
+    badgeText: "放松",
     brief: "情绪偏低",
     summary:
       "现在更适合安静观察，减少刺激，再结合休息和食欲一起判断状态变化。",
     accent: "#8e82af",
-    soft: "rgba(142, 130, 175, 0.16)",
-    glow: "rgba(142, 130, 175, 0.22)",
+    soft: "rgba(142, 130, 175, 0.15)",
+    glow: "rgba(142, 130, 175, 0.2)",
+    pageTint: "linear-gradient(180deg, #f7f4fb 0%, #eeeaf6 48%, #f5efe7 100%)",
+    surfaceTint:
+      "linear-gradient(180deg, rgba(255, 253, 248, 0.98) 0%, rgba(246, 242, 251, 0.94) 100%)",
+    badgeFrom: "#9a90bd",
+    badgeTo: "#756c9f",
+    lineFrom: "rgba(142, 130, 175, 0.72)",
+    lineTo: "rgba(188, 177, 214, 0.82)",
     suggestions: [
       { label: "优先动作", value: "以安静陪伴为主，先不安排高强度活动。", icon: "heart" },
       { label: "互动方式", value: "靠近陪着它就好，不必频繁逗弄。", icon: "gift" },
@@ -105,8 +150,10 @@ const fallbackMood = emotionCatalog.find((item) => item.key === "happy");
 const moodMetaMap = new Map();
 emotionCatalog.forEach((item) => {
   moodMetaMap.set(item.key, item);
-  moodMetaMap.set(item.label, item);
-  moodMetaMap.set(item.key.toLowerCase(), item);
+  item.aliases.forEach((alias) => {
+    moodMetaMap.set(alias, item);
+    moodMetaMap.set(alias.toLowerCase(), item);
+  });
 });
 
 const currentMood = computed(() =>
@@ -145,10 +192,16 @@ const heroTheme = computed(() => ({
   "--emotion-accent": currentMoodMeta.value.accent,
   "--emotion-soft": currentMoodMeta.value.soft,
   "--emotion-glow": currentMoodMeta.value.glow,
+  "--emotion-page-tint": currentMoodMeta.value.pageTint,
+  "--emotion-surface-tint": currentMoodMeta.value.surfaceTint,
+  "--emotion-badge-from": currentMoodMeta.value.badgeFrom,
+  "--emotion-badge-to": currentMoodMeta.value.badgeTo,
+  "--emotion-line-from": currentMoodMeta.value.lineFrom,
+  "--emotion-line-to": currentMoodMeta.value.lineTo,
 }));
 
 onMounted(async () => {
-  await refreshEmotionBundle();
+  await refreshEmotionBundle({ force: true });
   startEmotionPolling();
 });
 
@@ -171,8 +224,8 @@ function formatTime(value) {
 </script>
 
 <template>
-  <main class="emotion-page">
-    <section class="emotion-card" :style="heroTheme">
+  <main class="emotion-page" :style="heroTheme">
+    <section class="emotion-card">
       <div class="card-top">
         <span class="card-kicker">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -213,7 +266,7 @@ function formatTime(value) {
         <div class="hero-copy">
           <h1>
             {{ currentMoodDisplay }}
-            <span class="title-accent" aria-hidden="true">✦</span>
+            <span class="title-accent" aria-hidden="true">{{ currentMoodMeta.mark }}</span>
           </h1>
           <p class="hero-brief">{{ currentMoodMeta.brief }}</p>
           <p class="hero-summary">{{ heroSummary }}</p>
@@ -228,31 +281,11 @@ function formatTime(value) {
             />
           </div>
 
-          <div class="hero-float-badge">
-            <svg viewBox="0 0 24 24">
-              <path
-                d="M9 18V7.2c0-1 .8-1.8 1.8-1.8h5.4"
-                fill="none"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="1.8"
-              />
-              <path
-                d="M16.2 5.4v8.6"
-                fill="none"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-width="1.8"
-              />
-              <circle cx="7.4" cy="18" r="2.4" fill="none" stroke="currentColor" stroke-width="1.8" />
-              <circle cx="16.2" cy="16.2" r="2.4" fill="none" stroke="currentColor" stroke-width="1.8" />
-            </svg>
+          <div class="hero-float-badge" :aria-label="currentMoodMeta.badgeText">
+            <span>{{ currentMoodMeta.badgeText }}</span>
           </div>
         </div>
       </div>
-
-
 
       <article class="state-pill">
         <span class="state-pill-mark">{{ currentMoodMeta.mark }}</span>

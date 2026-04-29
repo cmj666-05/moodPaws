@@ -32,6 +32,15 @@ export async function initSchema() {
       ts INTEGER NOT NULL,
       FOREIGN KEY (message_id) REFERENCES mqtt_messages(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS emotion_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source TEXT NOT NULL DEFAULT '',
+      mood_label TEXT NOT NULL DEFAULT '',
+      score REAL,
+      summary_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL
+    );
   `)
 
   await ensureColumn('mqtt_messages', 'device_type TEXT')
